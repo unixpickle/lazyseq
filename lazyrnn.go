@@ -43,9 +43,26 @@ type Seq interface {
 	// The Forward() channel should not be used once
 	// Propagate() has been called.
 	//
-	// A call to Propagate should unblock all pending calls
-	// to Vars().
+	// Propagate should unblock all pending calls to Vars()
+	// before it attempts to receive upstream batches.
 	//
 	// Propagate may be called more than once.
 	Propagate(upstream <-chan *anyseq.Batch, grad anydiff.Grad)
+}
+
+// A Rereader is a Seq which can re-produce any sub-range
+// of its outputs.
+type Rereader interface {
+	Seq
+
+	// Reread creates a channel which is sent the outputs
+	// in the range [start, end).
+	// The channel is closed once all batches are sent.
+	//
+	// This may block in the same way that Vars() may block.
+	// Importantly, the upstream channel passed to
+	// Propagate() may depend on Reread(), so Propagate()
+	// absolutely must unblock Reread() before attempting to
+	// read upstream batches.
+	Reread(start, end int) <-chan *anyseq.Batch
 }

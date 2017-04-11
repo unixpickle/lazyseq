@@ -11,8 +11,8 @@ type lazifySeq struct {
 	Out <-chan *anyseq.Batch
 }
 
-// Lazify creates a Seq out of an anyseq.Seq.
-func Lazify(seq anyseq.Seq) Seq {
+// Lazify creates a lazy sequence out of an anyseq.Seq.
+func Lazify(seq anyseq.Seq) Rereader {
 	out := seq.Output()
 	outChan := make(chan *anyseq.Batch, len(out))
 	for _, x := range seq.Output() {
@@ -47,6 +47,15 @@ func (l *lazifySeq) Propagate(upstream <-chan *anyseq.Batch, grad anydiff.Grad) 
 		panic("too many upstream batches")
 	}
 	l.Seq.Propagate(uList, grad)
+}
+
+func (l *lazifySeq) Reread(start, end int) <-chan *anyseq.Batch {
+	res := make(chan *anyseq.Batch, end-start)
+	for _, x := range l.Seq.Output()[start:end] {
+		res <- x
+	}
+	close(res)
+	return res
 }
 
 type unlazifySeq struct {
