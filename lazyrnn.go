@@ -35,10 +35,12 @@ type Seq interface {
 
 	// Propagate performs back-propagation.
 	//
-	// The u argument is a channel of upstream gradients,
-	// ordered from the last timestep to the first.
+	// The upstream argument is a channel of upstream
+	// gradients, ordered last-to-first timestep.
 	// The caller should ensure that u is closed once all
 	// upstream batches have been sent.
+	// Propagate() may modify upstream vectors, perhaps
+	// to use them as scratch space.
 	//
 	// The Forward() channel should not be used once
 	// Propagate() has been called.
