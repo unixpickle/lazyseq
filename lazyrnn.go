@@ -41,9 +41,11 @@ type Seq interface {
 	// upstream batches have been sent.
 	//
 	// The Forward() channel should not be used once
-	// Propagate has been called.
+	// Propagate() has been called.
 	//
 	// A call to Propagate should unblock all pending calls
 	// to Vars().
+	//
+	// Propagate may be called more than once.
 	Propagate(upstream <-chan *anyseq.Batch, grad anydiff.Grad)
 }
