@@ -36,6 +36,7 @@ func (b *bptt) Run() anyrnn.StateGrad {
 		}
 		res := b.Block.Step(state, in.Packed)
 		reses = append(reses, res)
+		state = res.State()
 	}
 
 	nextGrad := b.UpstreamState
