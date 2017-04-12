@@ -10,11 +10,14 @@ import (
 func bptt(in <-chan *anyseq.Batch, block anyrnn.Block, start anyrnn.State) rnnFragment {
 	outChan := make(chan *anyseq.Batch, 1)
 	doneChan := make(chan struct{})
-	frag := &bpttResult{forward: outChan, done: doneChan}
+	frag := &bpttFrag{forward: outChan, done: doneChan, v: anydiff.VarSet{}}
 
 	go func() {
 		state := start
 		for batch := range in {
+			if state == nil {
+				state = block.Start(len(batch.Present))
+			}
 			if batch.NumPresent() != state.Present().NumPresent() {
 				state = state.Reduce(batch.Present)
 			}
@@ -25,26 +28,34 @@ func bptt(in <-chan *anyseq.Batch, block anyrnn.Block, start anyrnn.State) rnnFr
 				Packed:  res.Output(),
 				Present: state.Present(),
 			}
+			frag.v = anydiff.MergeVarSets(frag.v, res.Vars())
 		}
 		close(outChan)
+		close(doneChan)
 	}()
 
 	return frag
 }
 
-type bpttResult struct {
+type bpttFrag struct {
 	forward <-chan *anyseq.Batch
 
 	// Fields are immutable once done is closed.
 	done  <-chan struct{}
 	reses []anyrnn.Res
+	v     anydiff.VarSet
 }
 
-func (b *bpttResult) Forward() <-chan *anyseq.Batch {
+func (b *bpttFrag) Forward() <-chan *anyseq.Batch {
 	return b.forward
 }
 
-func (b *bpttResult) Propagate(down chan<- *anyseq.Batch, up <-chan *anyseq.Batch,
+func (b *bpttFrag) Vars() anydiff.VarSet {
+	<-b.done
+	return b.v
+}
+
+func (b *bpttFrag) Propagate(down chan<- *anyseq.Batch, up <-chan *anyseq.Batch,
 	stateUp anyrnn.StateGrad, grad *Grad) anyrnn.StateGrad {
 	for _ = range b.forward {
 	}

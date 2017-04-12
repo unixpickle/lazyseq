@@ -30,3 +30,28 @@ func TestFixedHSMEquiv(t *testing.T) {
 		})
 	}
 }
+
+func TestRecursiveHSMEquiv(t *testing.T) {
+	const inSize = 3
+	const outSize = 2
+
+	c := anyvec64.DefaultCreator{}
+
+	block := anyrnn.NewLSTM(c, inSize, outSize)
+
+	for interval := 1; interval < 10; interval++ {
+		for partition := 2; partition < 10; partition++ {
+			t.Run(fmt.Sprintf("%d:%d", interval, partition), func(t *testing.T) {
+				inSeqs := testSeqs(c, inSize)
+				actualFunc := func() anyseq.Seq {
+					return Unlazify(RecursiveHSM(interval, partition,
+						Lazify(inSeqs), block))
+				}
+				expectedFunc := func() anyseq.Seq {
+					return anyrnn.Map(inSeqs, block)
+				}
+				testEquivalent(t, actualFunc, expectedFunc)
+			})
+		}
+	}
+}
