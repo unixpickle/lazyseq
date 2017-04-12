@@ -66,11 +66,19 @@ func (f *fixedHSMRes) Vars() anydiff.VarSet {
 func (f *fixedHSMRes) Propagate(u <-chan *anyseq.Batch, grad anydiff.Grad) {
 	f.finishForward()
 
-	downstream := make(chan *anyseq.Batch, 1)
+	var downstream chan *anyseq.Batch
+	if grad.Intersects(f.In.Vars()) {
+		downstream = make(chan *anyseq.Batch, 1)
+
+	}
 
 	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		if downstream != nil {
+			defer close(downstream)
+		}
 
 		var nextGrad anyrnn.StateGrad
 		nextIdx := f.NumSteps
@@ -88,18 +96,23 @@ func (f *fixedHSMRes) Propagate(u <-chan *anyseq.Batch, grad anydiff.Grad) {
 			nextGrad = b.Run()
 		}
 
+		if nextGrad != nil {
+			f.propagateStart(nextGrad, grad)
+		}
+
 		if _, ok := <-u; ok {
 			panic("too many upstream batches")
 		}
 	}()
 
-	f.In.Propagate(downstream, grad)
+	if downstream != nil {
+		f.In.Propagate(downstream, grad)
+	}
+
 	wg.Wait()
 }
 
 func (f *fixedHSMRes) forward(outChan chan<- *anyseq.Batch, doneChan chan<- struct{}) {
-	defer close(doneChan)
-
 	var state anyrnn.State
 	for input := range f.In.Forward() {
 		if f.NumSteps == 0 {
@@ -118,6 +131,22 @@ func (f *fixedHSMRes) forward(outChan chan<- *anyseq.Batch, doneChan chan<- stru
 		state = res.State()
 		outChan <- &anyseq.Batch{Present: input.Present, Packed: res.Output()}
 	}
+
+	f.V = anydiff.MergeVarSets(f.V, f.In.Vars())
+	close(doneChan)
+	close(outChan)
+}
+
+func (f *fixedHSMRes) propagateStart(nextGrad anyrnn.StateGrad, grad anydiff.Grad) {
+	numSeqs := len(nextGrad.Present())
+	if nextGrad.Present().NumPresent() != numSeqs {
+		allTrue := make(anyrnn.PresentMap, numSeqs)
+		for i := range allTrue {
+			allTrue[i] = true
+		}
+		nextGrad = nextGrad.Expand(allTrue)
+	}
+	f.Block.PropagateStart(nextGrad, grad)
 }
 
 func (f *fixedHSMRes) finishForward() {

@@ -11,8 +11,10 @@ import (
 type bptt struct {
 	Block anyrnn.Block
 
-	Ins        <-chan *anyseq.Batch
-	Upstream   <-chan *anyseq.Batch
+	Ins      <-chan *anyseq.Batch
+	Upstream <-chan *anyseq.Batch
+
+	// May be nil.
 	Downstream chan<- *anyseq.Batch
 
 	Start anyrnn.State
@@ -40,7 +42,7 @@ func (b *bptt) Run() anyrnn.StateGrad {
 	for j := len(reses) - 1; j >= 0; j-- {
 		res := reses[j]
 		pres := res.State().Present()
-		if nextGrad.Present().NumPresent() != pres.NumPresent() {
+		if nextGrad != nil && nextGrad.Present().NumPresent() != pres.NumPresent() {
 			nextGrad = nextGrad.Expand(pres)
 		}
 		var inDown anyvec.Vector
@@ -50,9 +52,11 @@ func (b *bptt) Run() anyrnn.StateGrad {
 		}
 		upVec := upBatch.Packed
 		inDown, nextGrad = res.Propagate(upVec, nextGrad, b.Grad)
-		b.Downstream <- &anyseq.Batch{
-			Packed:  inDown,
-			Present: upBatch.Present,
+		if b.Downstream != nil {
+			b.Downstream <- &anyseq.Batch{
+				Packed:  inDown,
+				Present: upBatch.Present,
+			}
 		}
 	}
 
