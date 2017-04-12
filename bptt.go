@@ -7,61 +7,70 @@ import (
 	"github.com/unixpickle/anyvec"
 )
 
-// bptt performs back-propagation through time.
-type bptt struct {
-	Block anyrnn.Block
+func bptt(in <-chan *anyseq.Batch, block anyrnn.Block, start anyrnn.State) rnnFragment {
+	outChan := make(chan *anyseq.Batch, 1)
+	doneChan := make(chan struct{})
+	frag := &bpttResult{forward: outChan, done: doneChan}
 
-	Ins      <-chan *anyseq.Batch
-	Upstream <-chan *anyseq.Batch
+	go func() {
+		state := start
+		for batch := range in {
+			if batch.NumPresent() != state.Present().NumPresent() {
+				state = state.Reduce(batch.Present)
+			}
+			res := block.Step(state, batch.Packed)
+			frag.reses = append(frag.reses, res)
+			state = res.State()
+			outChan <- &anyseq.Batch{
+				Packed:  res.Output(),
+				Present: state.Present(),
+			}
+		}
+		close(outChan)
+	}()
 
-	// May be nil.
-	Downstream chan<- *anyseq.Batch
-
-	Start anyrnn.State
-	Grad  *Grad
-
-	// May be nil.
-	UpstreamState anyrnn.StateGrad
+	return frag
 }
 
-// Run runs back-propagation through time and returns the
-// downstream state gradient.
-func (b *bptt) Run() anyrnn.StateGrad {
-	state := b.Start
+type bpttResult struct {
+	forward <-chan *anyseq.Batch
 
-	var reses []anyrnn.Res
-	for in := range b.Ins {
-		if in.NumPresent() != state.Present().NumPresent() {
-			state = state.Reduce(in.Present)
-		}
-		res := b.Block.Step(state, in.Packed)
-		reses = append(reses, res)
-		state = res.State()
+	// Fields are immutable once done is closed.
+	done  <-chan struct{}
+	reses []anyrnn.Res
+}
+
+func (b *bpttResult) Forward() <-chan *anyseq.Batch {
+	return b.forward
+}
+
+func (b *bpttResult) Propagate(down chan<- *anyseq.Batch, up <-chan *anyseq.Batch,
+	stateUp anyrnn.StateGrad, grad *Grad) anyrnn.StateGrad {
+	for _ = range b.forward {
 	}
 
-	nextGrad := b.UpstreamState
-	for j := len(reses) - 1; j >= 0; j-- {
-		res := reses[j]
+	nextGrad := stateUp
+	for j := len(b.reses) - 1; j >= 0; j-- {
+		res := b.reses[j]
 		pres := res.State().Present()
 		if nextGrad != nil && nextGrad.Present().NumPresent() != pres.NumPresent() {
 			nextGrad = nextGrad.Expand(pres)
 		}
-		upBatch, ok := <-b.Upstream
+		upBatch, ok := <-up
 		if !ok {
 			panic("not enough upstream batches")
 		}
 		upVec := upBatch.Packed
 		var inDown anyvec.Vector
-		b.Grad.Use(func(g anydiff.Grad) {
+		grad.Use(func(g anydiff.Grad) {
 			inDown, nextGrad = res.Propagate(upVec, nextGrad, g)
 		})
-		if b.Downstream != nil {
-			b.Downstream <- &anyseq.Batch{
+		if down != nil {
+			down <- &anyseq.Batch{
 				Packed:  inDown,
 				Present: upBatch.Present,
 			}
 		}
 	}
-
 	return nextGrad
 }

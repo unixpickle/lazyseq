@@ -84,17 +84,9 @@ func (f *fixedHSMRes) Propagate(u <-chan *anyseq.Batch, grad *Grad) {
 		var nextGrad anyrnn.StateGrad
 		nextIdx := f.NumSteps
 		for i := len(f.Saved) - 1; i >= 0; i-- {
-			b := &bptt{
-				Block:         f.Block,
-				Ins:           f.In.Reread(i*f.Interval, nextIdx),
-				Upstream:      u,
-				Downstream:    downstream,
-				Start:         f.Saved[i],
-				Grad:          grad,
-				UpstreamState: nextGrad,
-			}
+			frag := bptt(f.In.Reread(i*f.Interval, nextIdx), f.Block, f.Saved[i])
+			nextGrad = frag.Propagate(downstream, u, nextGrad, grad)
 			nextIdx = i * f.Interval
-			nextGrad = b.Run()
 		}
 
 		if nextGrad != nil {
