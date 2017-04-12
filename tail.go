@@ -94,7 +94,7 @@ func (t *tailRes) Propagate(u anyvec.Vector, g anydiff.Grad) {
 		}
 	}()
 
-	t.In.Propagate(downstream, g)
+	t.In.Propagate(downstream, NewGrad(g))
 	wg.Wait()
 }
 

@@ -34,7 +34,7 @@ func (l *lazifySeq) Vars() anydiff.VarSet {
 	return l.Seq.Vars()
 }
 
-func (l *lazifySeq) Propagate(upstream <-chan *anyseq.Batch, grad anydiff.Grad) {
+func (l *lazifySeq) Propagate(upstream <-chan *anyseq.Batch, grad *Grad) {
 	uList := make([]*anyseq.Batch, len(l.Seq.Output()))
 	for i := len(uList) - 1; i >= 0; i-- {
 		var ok bool
@@ -46,7 +46,9 @@ func (l *lazifySeq) Propagate(upstream <-chan *anyseq.Batch, grad anydiff.Grad) 
 	if _, ok := <-upstream; ok {
 		panic("too many upstream batches")
 	}
-	l.Seq.Propagate(uList, grad)
+	grad.Use(func(g anydiff.Grad) {
+		l.Seq.Propagate(uList, g)
+	})
 }
 
 func (l *lazifySeq) Reread(start, end int) <-chan *anyseq.Batch {
@@ -95,5 +97,5 @@ func (u *unlazifySeq) Propagate(upstream []*anyseq.Batch, grad anydiff.Grad) {
 		uChan <- upstream[i]
 	}
 	close(uChan)
-	u.Seq.Propagate(uChan, grad)
+	u.Seq.Propagate(uChan, NewGrad(grad))
 }

@@ -18,7 +18,7 @@ type bptt struct {
 	Downstream chan<- *anyseq.Batch
 
 	Start anyrnn.State
-	Grad  anydiff.Grad
+	Grad  *Grad
 
 	// May be nil.
 	UpstreamState anyrnn.StateGrad
@@ -46,13 +46,15 @@ func (b *bptt) Run() anyrnn.StateGrad {
 		if nextGrad != nil && nextGrad.Present().NumPresent() != pres.NumPresent() {
 			nextGrad = nextGrad.Expand(pres)
 		}
-		var inDown anyvec.Vector
 		upBatch, ok := <-b.Upstream
 		if !ok {
 			panic("not enough upstream batches")
 		}
 		upVec := upBatch.Packed
-		inDown, nextGrad = res.Propagate(upVec, nextGrad, b.Grad)
+		var inDown anyvec.Vector
+		b.Grad.Use(func(g anydiff.Grad) {
+			inDown, nextGrad = res.Propagate(upVec, nextGrad, g)
+		})
 		if b.Downstream != nil {
 			b.Downstream <- &anyseq.Batch{
 				Packed:  inDown,

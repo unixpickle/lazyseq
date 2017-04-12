@@ -63,14 +63,15 @@ func (f *fixedHSMRes) Vars() anydiff.VarSet {
 	return f.V
 }
 
-func (f *fixedHSMRes) Propagate(u <-chan *anyseq.Batch, grad anydiff.Grad) {
+func (f *fixedHSMRes) Propagate(u <-chan *anyseq.Batch, grad *Grad) {
 	f.finishForward()
 
 	var downstream chan *anyseq.Batch
-	if grad.Intersects(f.In.Vars()) {
-		downstream = make(chan *anyseq.Batch, 1)
-
-	}
+	grad.Use(func(g anydiff.Grad) {
+		if g.Intersects(f.In.Vars()) {
+			downstream = make(chan *anyseq.Batch, 1)
+		}
+	})
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -137,7 +138,7 @@ func (f *fixedHSMRes) forward(outChan chan<- *anyseq.Batch, doneChan chan<- stru
 	close(outChan)
 }
 
-func (f *fixedHSMRes) propagateStart(nextGrad anyrnn.StateGrad, grad anydiff.Grad) {
+func (f *fixedHSMRes) propagateStart(nextGrad anyrnn.StateGrad, grad *Grad) {
 	numSeqs := len(nextGrad.Present())
 	if nextGrad.Present().NumPresent() != numSeqs {
 		allTrue := make(anyrnn.PresentMap, numSeqs)
@@ -146,7 +147,9 @@ func (f *fixedHSMRes) propagateStart(nextGrad anyrnn.StateGrad, grad anydiff.Gra
 		}
 		nextGrad = nextGrad.Expand(allTrue)
 	}
-	f.Block.PropagateStart(nextGrad, grad)
+	grad.Use(func(g anydiff.Grad) {
+		f.Block.PropagateStart(nextGrad, g)
+	})
 }
 
 func (f *fixedHSMRes) finishForward() {

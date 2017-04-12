@@ -3,6 +3,8 @@
 package lazyrnn
 
 import (
+	"sync"
+
 	"github.com/unixpickle/anydiff"
 	"github.com/unixpickle/anydiff/anyseq"
 	"github.com/unixpickle/anyvec"
@@ -49,7 +51,7 @@ type Seq interface {
 	// before it attempts to receive upstream batches.
 	//
 	// Propagate may be called more than once.
-	Propagate(upstream <-chan *anyseq.Batch, grad anydiff.Grad)
+	Propagate(upstream <-chan *anyseq.Batch, grad *Grad)
 }
 
 // A Rereader is a Seq which can re-produce any sub-range
@@ -67,4 +69,25 @@ type Rereader interface {
 	// absolutely must unblock Reread() before attempting to
 	// read upstream batches.
 	Reread(start, end int) <-chan *anyseq.Batch
+}
+
+// Grad is a gradient paired with a lock that controls
+// access to it.
+type Grad struct {
+	lock sync.RWMutex
+	grad anydiff.Grad
+}
+
+// NewGrad creates a Grad which wraps a raw gradient.
+func NewGrad(g anydiff.Grad) *Grad {
+	return &Grad{grad: g}
+}
+
+// Use calls f with the gradient.
+// While f is running, other WithGrad calls on the same
+// object will block.
+func (g *Grad) Use(f func(g anydiff.Grad)) {
+	g.lock.Lock()
+	defer g.lock.Unlock()
+	f(g.grad)
 }
