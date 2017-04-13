@@ -129,7 +129,7 @@ func (r *recHSMFrag) subFragment(start, end int, state anyrnn.State) rnnFragment
 func (r *recHSMFrag) forward(outChan chan<- *anyseq.Batch, doneChan chan<- struct{},
 	state anyrnn.State) {
 	for input := range r.In.Forward {
-		if r.NumSteps == 0 {
+		if state == nil {
 			state = r.Block.Start(len(input.Present))
 		}
 		if state.Present().NumPresent() != input.NumPresent() {
