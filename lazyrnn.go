@@ -84,8 +84,8 @@ func NewGrad(g anydiff.Grad) *Grad {
 }
 
 // Use calls f with the gradient.
-// While f is running, other WithGrad calls on the same
-// object will block.
+// While f is running, other Use calls on the same object
+// will block.
 func (g *Grad) Use(f func(g anydiff.Grad)) {
 	g.lock.Lock()
 	defer g.lock.Unlock()
