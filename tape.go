@@ -7,8 +7,14 @@ import (
 )
 
 // A Tape is a non-differentiable sequence that can be
-// re-read arbitrarily and may be generated while it is
+// accessed randomly and may be generated while it is
 // being read.
+//
+// All of the restrictions on sequences apply to to Tapes.
+// For example, all timesteps must have the same number of
+// entries in the Present list.
+// Also, it is invalid for a sequence to go away (i.e. not
+// be present) and then become present again later.
 //
 // Tapes can be used to store and re-use sequences.
 // For example, you can use a Tape to record the results
@@ -87,7 +93,22 @@ func (r *referenceTape) ReadTape(start, end int) <-chan *anyseq.Batch {
 }
 
 func (r *referenceTape) readInputs(inChan <-chan *anyseq.Batch) {
+	var lastPresent []bool
 	for input := range inChan {
+		if lastPresent == nil {
+			lastPresent = input.Present
+		} else {
+			if len(lastPresent) != len(input.Present) {
+				panic("mismatching present map size")
+			}
+			for i, newPres := range input.Present {
+				oldPres := lastPresent[i]
+				if !oldPres && newPres {
+					panic("absent sequence became present again")
+				}
+			}
+			lastPresent = input.Present
+		}
 		r.lock.Lock()
 		r.timesteps = append(r.timesteps, input)
 		close(r.nextWait)
