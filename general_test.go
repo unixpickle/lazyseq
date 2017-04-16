@@ -66,6 +66,29 @@ func testEquivalent(t *testing.T, actual, expected func() anyseq.Seq) {
 	})
 }
 
+// testEquivalentRes is like testEquivalent, but for
+// functions which produce vectors.
+func testEquivalentRes(t *testing.T, actual, expected func() anydiff.Res) {
+	c := expected().Output().Creator()
+	actualFunc := func() anyseq.Seq {
+		return anyseq.ResSeq(c, []*anyseq.ResBatch{
+			&anyseq.ResBatch{
+				Packed:  actual(),
+				Present: []bool{true},
+			},
+		})
+	}
+	expectedFunc := func() anyseq.Seq {
+		return anyseq.ResSeq(c, []*anyseq.ResBatch{
+			&anyseq.ResBatch{
+				Packed:  expected(),
+				Present: []bool{true},
+			},
+		})
+	}
+	testEquivalent(t, actualFunc, expectedFunc)
+}
+
 func testVarEquivalence(t *testing.T, actual, expected func() anyseq.Seq) {
 	vars1 := actual().Vars()
 	vars2 := expected().Vars()
