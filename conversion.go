@@ -99,3 +99,44 @@ func (u *unlazifySeq) Propagate(upstream []*anyseq.Batch, grad anydiff.Grad) {
 	close(uChan)
 	u.Seq.Propagate(uChan, NewGrad(grad))
 }
+
+type tapeRereader struct {
+	C    anyvec.Creator
+	Tape Tape
+	Out  <-chan *anyseq.Batch
+}
+
+// TapeRereader creates a constant Rereader from a Tape.
+func TapeRereader(c anyvec.Creator, t Tape) Rereader {
+	return &tapeRereader{
+		C:    c,
+		Tape: t,
+		Out:  t.ReadTape(0, -1),
+	}
+}
+
+func (t *tapeRereader) Creator() anyvec.Creator {
+	return t.C
+}
+
+func (t *tapeRereader) Forward() <-chan *anyseq.Batch {
+	return t.Out
+}
+
+func (t *tapeRereader) Vars() anydiff.VarSet {
+	return anydiff.VarSet{}
+}
+
+func (t *tapeRereader) Propagate(upstream <-chan *anyseq.Batch, grad *Grad) {
+	// Users may depend on Propagate cleaning up the
+	// resources held by t.Forward() not being read.
+	for _ = range t.Forward() {
+	}
+
+	for _ = range upstream {
+	}
+}
+
+func (t *tapeRereader) Reread(start, end int) <-chan *anyseq.Batch {
+	return t.Tape.ReadTape(start, end)
+}
