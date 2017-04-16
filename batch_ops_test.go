@@ -5,6 +5,7 @@ import (
 
 	"github.com/unixpickle/anydiff"
 	"github.com/unixpickle/anydiff/anyseq"
+	"github.com/unixpickle/anynet/anyrnn"
 	"github.com/unixpickle/anyvec"
 	"github.com/unixpickle/anyvec/anyvec64"
 	"github.com/unixpickle/essentials"
@@ -21,19 +22,42 @@ func TestPack(t *testing.T) {
 		testSeqsLen(c, inSize, 5),
 	}
 
-	t.Run("Seq", func(t *testing.T) {
-		testEquivalent(t, func() anyseq.Seq {
-			var lazySeqs []Seq
-			for _, s := range seqs {
-				lazySeqs = append(lazySeqs, Lazify(s))
-			}
-			return Unlazify(Pack(c, lazySeqs))
-		}, func() anyseq.Seq {
-			return packAnyseq(c, seqs)
-		})
+	testEquivalent(t, func() anyseq.Seq {
+		var lazySeqs []Seq
+		for _, s := range seqs {
+			lazySeqs = append(lazySeqs, Lazify(s))
+		}
+		return Unlazify(Pack(c, lazySeqs))
+	}, func() anyseq.Seq {
+		return packAnyseq(c, seqs)
 	})
+}
 
-	// TODO: test rereader equivalent here...
+func TestPackRereader(t *testing.T) {
+	// To test this, we have to use something that will
+	// actually call Reread().
+
+	const inSize = 3
+	const outSize = 2
+
+	c := anyvec64.DefaultCreator{}
+	seqs := []anyseq.Seq{
+		testSeqsLen(c, inSize, 1, 0, 5),
+		testSeqsLen(c, inSize, 7, 1),
+		testSeqsLen(c, inSize, 3, 4, 1, 3),
+		testSeqsLen(c, inSize, 5),
+	}
+	block := anyrnn.NewLSTM(c, inSize, outSize)
+
+	testEquivalent(t, func() anyseq.Seq {
+		var lazySeqs []Rereader
+		for _, s := range seqs {
+			lazySeqs = append(lazySeqs, Lazify(s))
+		}
+		return Unlazify(FixedHSM(3, PackRereader(c, lazySeqs), block))
+	}, func() anyseq.Seq {
+		return anyrnn.Map(packAnyseq(c, seqs), block)
+	})
 }
 
 func packAnyseq(c anyvec.Creator, seqs []anyseq.Seq) anyseq.Seq {

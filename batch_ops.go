@@ -6,6 +6,7 @@ import (
 	"github.com/unixpickle/anydiff"
 	"github.com/unixpickle/anydiff/anyseq"
 	"github.com/unixpickle/anyvec"
+	"github.com/unixpickle/essentials"
 )
 
 type packRes struct {
@@ -15,6 +16,7 @@ type packRes struct {
 
 	Done        <-chan struct{}
 	LanesPerSeq []int
+	Lens        []int
 	V           anydiff.VarSet
 }
 
@@ -30,6 +32,7 @@ func Pack(c anyvec.Creator, seqs []Seq) Seq {
 		Out:         outChan,
 		Done:        doneChan,
 		LanesPerSeq: make([]int, len(seqs)),
+		Lens:        make([]int, len(seqs)),
 		V:           anydiff.VarSet{},
 	}
 
@@ -83,7 +86,7 @@ func (p *packRes) Propagate(upstream <-chan *anyseq.Batch, grad *Grad) {
 }
 
 func (p *packRes) forward(out chan<- *anyseq.Batch, done chan<- struct{}) {
-	c := p.C
+	c := p.Creator()
 
 	for {
 		var numOpen int
@@ -94,6 +97,7 @@ func (p *packRes) forward(out chan<- *anyseq.Batch, done chan<- struct{}) {
 				numOpen++
 				batches = append(batches, batch)
 				p.LanesPerSeq[inIdx] = len(batch.Present)
+				p.Lens[inIdx]++
 			} else {
 				lanes := p.LanesPerSeq[inIdx]
 				batches = append(batches, fillerBatch(c, lanes))
@@ -111,6 +115,76 @@ func (p *packRes) forward(out chan<- *anyseq.Batch, done chan<- struct{}) {
 
 	close(out)
 	close(done)
+}
+
+type packRereaderRes struct {
+	*packRes
+	Rereaders []Rereader
+}
+
+// PackRereader is like Pack, but for Rereaders.
+func PackRereader(c anyvec.Creator, rs []Rereader) Rereader {
+	plain := make([]Seq, len(rs))
+	for i, x := range rs {
+		plain[i] = x
+	}
+	return &packRereaderRes{
+		packRes:   Pack(c, plain).(*packRes),
+		Rereaders: rs,
+	}
+}
+
+func (p *packRereaderRes) Reread(start, end int) <-chan *anyseq.Batch {
+	<-p.packRes.Done
+
+	if start > end || start < 0 {
+		panic("slice bounds out of range")
+	}
+
+	sourceChans := make([]<-chan *anyseq.Batch, len(p.Ins))
+	var maxLen int
+	for i, seqLen := range p.Lens {
+		maxLen = essentials.MaxInt(maxLen, seqLen)
+		if seqLen <= start {
+			empty := make(chan *anyseq.Batch)
+			sourceChans[i] = empty
+			close(empty)
+		} else {
+			subEnd := end
+			if subEnd > seqLen {
+				subEnd = seqLen
+			}
+			sourceChans[i] = p.Rereaders[i].Reread(start, subEnd)
+		}
+	}
+
+	if end > maxLen {
+		panic("slice bounds out of range")
+	}
+
+	out := make(chan *anyseq.Batch, 1)
+
+	go func() {
+		c := p.Creator()
+		for i := start; i < end; i++ {
+			var batches []*anyseq.Batch
+			for inIdx, ch := range sourceChans {
+				batch, ok := <-ch
+				if ok {
+					batches = append(batches, batch)
+					p.LanesPerSeq[inIdx] = len(batch.Present)
+					p.Lens[inIdx]++
+				} else {
+					lanes := p.LanesPerSeq[inIdx]
+					batches = append(batches, fillerBatch(c, lanes))
+				}
+			}
+			out <- joinBatches(c, batches)
+		}
+		close(out)
+	}()
+
+	return out
 }
 
 // splitUpstream splits an upstream batch into upstream
