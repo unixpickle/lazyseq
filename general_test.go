@@ -24,8 +24,12 @@ func testSeqs(c anyvec.Creator, inSize int) anyseq.Seq {
 	lengths[0] = lengths[2]
 	lengths[3] = lengths[5]
 
+	return testSeqsLen(c, inSize, lengths...)
+}
+
+func testSeqsLen(c anyvec.Creator, inSize int, lengths ...int) anyseq.Seq {
 	var seqs [][]anyvec.Vector
-	for i := 0; i < numSeqs; i++ {
+	for i := 0; i < len(lengths); i++ {
 		var seq []anyvec.Vector
 		for j := 0; j < lengths[i]; j++ {
 			vec := c.MakeVector(inSize)
