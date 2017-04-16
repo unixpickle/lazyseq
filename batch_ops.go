@@ -58,28 +58,37 @@ func (p *packRes) Propagate(upstream <-chan *anyseq.Batch, grad *Grad) {
 	for _ = range p.Forward() {
 	}
 
-	var downstreams []chan<- *anyseq.Batch
+	downstreams := make([]chan<- *anyseq.Batch, len(p.Ins))
 	var wg sync.WaitGroup
-	for _, in := range p.Ins {
+	for i, in := range p.Ins {
+		var needProp bool
+		grad.Use(func(g anydiff.Grad) {
+			needProp = g.Intersects(in.Vars())
+		})
+		if !needProp {
+			continue
+		}
 		wg.Add(1)
 		ch := make(chan *anyseq.Batch, 1)
 		go func(in Seq, ch <-chan *anyseq.Batch) {
 			in.Propagate(ch, grad)
 			wg.Done()
 		}(in, ch)
-		downstreams = append(downstreams, ch)
+		downstreams[i] = ch
 	}
 
 	for upBatch := range upstream {
 		for i, part := range p.splitUpstream(upBatch) {
-			if part != nil {
+			if part != nil && downstreams[i] != nil {
 				downstreams[i] <- part
 			}
 		}
 	}
 
 	for _, ch := range downstreams {
-		close(ch)
+		if ch != nil {
+			close(ch)
+		}
 	}
 
 	wg.Wait()
