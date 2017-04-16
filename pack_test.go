@@ -60,6 +60,73 @@ func TestPackRereader(t *testing.T) {
 	})
 }
 
+func TestPackTape(t *testing.T) {
+	c := anyvec64.DefaultCreator{}
+
+	tape1, writer1 := ReferenceTape()
+	tape2, writer2 := ReferenceTape()
+	tape3, writer3 := ReferenceTape()
+
+	joined := PackTape([]Tape{tape1, tape2, tape3})
+
+	inBatches := []*anyseq.Batch{
+		{Present: []bool{true, false, true}},
+		{Present: []bool{true, false, false}},
+		{Present: []bool{true, false, false}},
+		{Present: []bool{false, false, false}},
+
+		{Present: []bool{true, true}},
+		{Present: []bool{false, true}},
+	}
+	for _, b := range inBatches {
+		b.Packed = c.MakeVector(b.NumPresent() * 5)
+		anyvec.Rand(b.Packed, anyvec.Normal, nil)
+	}
+
+	outBatches := []*anyseq.Batch{}
+	for i := 0; i < 2; i++ {
+		outBatches = append(outBatches, &anyseq.Batch{
+			Present: append(append([]bool{}, inBatches[i].Present...),
+				inBatches[i+4].Present...),
+			Packed: c.Concat(inBatches[i].Packed, inBatches[i+4].Packed),
+		})
+	}
+	for i := 2; i < 4; i++ {
+		outBatches = append(outBatches, &anyseq.Batch{
+			Present: append(append([]bool{}, inBatches[i].Present...),
+				false, false),
+			Packed: inBatches[i].Packed,
+		})
+	}
+
+	out1 := joined.ReadTape(0, 1)
+	out2 := joined.ReadTape(1, -1)
+
+	writer3 <- inBatches[4]
+	writer3 <- inBatches[5]
+	writer1 <- inBatches[0]
+	close(writer2)
+
+	mustRead(t, outBatches[0], out1)
+	mustNotRead(t, out2)
+
+	writer1 <- inBatches[1]
+	mustRead(t, nil, out1)
+	mustRead(t, outBatches[1], out2)
+
+	writer1 <- inBatches[2]
+	close(writer3)
+
+	mustRead(t, outBatches[2], out2)
+
+	writer1 <- inBatches[3]
+	mustRead(t, outBatches[3], out2)
+
+	close(writer1)
+
+	mustRead(t, nil, out2)
+}
+
 func packAnyseq(c anyvec.Creator, seqs []anyseq.Seq) anyseq.Seq {
 	if len(seqs) == 0 {
 		return anyseq.ConstSeqList(c, nil)

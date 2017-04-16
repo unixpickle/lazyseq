@@ -108,6 +108,31 @@ func (p *packRes) forward(out chan<- *anyseq.Batch, done chan<- struct{}) {
 	close(out)
 }
 
+// splitUpstream splits an upstream batch into upstream
+// batches for each input.
+// If an input is not present yet, its batch is nil.
+func (p *packRes) splitUpstream(upBatch *anyseq.Batch) []*anyseq.Batch {
+	vecSize := upBatch.Packed.Len() / upBatch.NumPresent()
+	res := make([]*anyseq.Batch, len(p.Ins))
+
+	var laneOffset int
+	var vecOffset int
+	for inIdx, numLanes := range p.LanesPerSeq {
+		subBatch := &anyseq.Batch{
+			Present: upBatch.Present[laneOffset : laneOffset+numLanes],
+		}
+		if subBatch.NumPresent() > 0 {
+			subBatch.Packed = upBatch.Packed.Slice(vecOffset*vecSize,
+				(vecOffset+subBatch.NumPresent())*vecSize)
+			res[inIdx] = subBatch
+			vecOffset += subBatch.NumPresent()
+		}
+		laneOffset += numLanes
+	}
+
+	return res
+}
+
 type packRereaderRes struct {
 	*packRes
 	Rereaders []Rereader
@@ -157,50 +182,67 @@ func (p *packRereaderRes) Reread(start, end int) <-chan *anyseq.Batch {
 
 	go func() {
 		c := p.Creator()
-		for i := start; i < end; i++ {
-			var batches []*anyseq.Batch
-			for inIdx, ch := range sourceChans {
-				batch, ok := <-ch
-				if ok {
-					batches = append(batches, batch)
-					p.LanesPerSeq[inIdx] = len(batch.Present)
-					p.Lens[inIdx]++
-				} else {
-					lanes := p.LanesPerSeq[inIdx]
-					batches = append(batches, fillerBatch(c, lanes))
-				}
-			}
-			out <- joinBatches(c, batches)
-		}
+		streamAndJoin(c, sourceChans, p.LanesPerSeq, out)
 		close(out)
 	}()
 
 	return out
 }
 
-// splitUpstream splits an upstream batch into upstream
-// batches for each input.
-// If an input is not present yet, its batch is nil.
-func (p *packRes) splitUpstream(upBatch *anyseq.Batch) []*anyseq.Batch {
-	vecSize := upBatch.Packed.Len() / upBatch.NumPresent()
-	res := make([]*anyseq.Batch, len(p.Ins))
+type packedTape struct {
+	LanesCounted <-chan struct{}
+	Creator      anyvec.Creator
+	LanesPerTape []int
 
-	var laneOffset int
-	var vecOffset int
-	for inIdx, numLanes := range p.LanesPerSeq {
-		subBatch := &anyseq.Batch{
-			Present: upBatch.Present[laneOffset : laneOffset+numLanes],
-		}
-		if subBatch.NumPresent() > 0 {
-			subBatch.Packed = upBatch.Packed.Slice(vecOffset*vecSize,
-				(vecOffset+subBatch.NumPresent())*vecSize)
-			res[inIdx] = subBatch
-			vecOffset += subBatch.NumPresent()
-		}
-		laneOffset += numLanes
+	Tapes []Tape
+}
+
+// PackTape creates an aggregate Tape that combines the
+// sequences from other tapes.
+func PackTape(tapes []Tape) Tape {
+	countedChan := make(chan struct{})
+	res := &packedTape{
+		LanesCounted: countedChan,
+		LanesPerTape: make([]int, len(tapes)),
+		Tapes:        tapes,
 	}
 
+	go func() {
+		res.countLanes()
+		close(countedChan)
+	}()
+
 	return res
+}
+
+func (t *packedTape) ReadTape(start, end int) <-chan *anyseq.Batch {
+	res := make(chan *anyseq.Batch)
+	inChans := make([]<-chan *anyseq.Batch, len(t.Tapes))
+	for i, t := range t.Tapes {
+		inChans[i] = t.ReadTape(start, end)
+	}
+	go func() {
+		<-t.LanesCounted
+		// A nil creator means there are no batches, anyway.
+		if t.Creator != nil {
+			streamAndJoin(t.Creator, inChans, t.LanesPerTape, res)
+		}
+		close(res)
+	}()
+	return res
+}
+
+func (p *packedTape) countLanes() {
+	seqs := make([]<-chan *anyseq.Batch, len(p.Tapes))
+	for i, t := range p.Tapes {
+		seqs[i] = t.ReadTape(0, 1)
+	}
+	for i, ch := range seqs {
+		if batch, ok := <-ch; ok {
+			p.LanesPerTape[i] = len(batch.Present)
+			p.Creator = batch.Packed.Creator()
+		}
+	}
 }
 
 func joinBatches(c anyvec.Creator, batches []*anyseq.Batch) *anyseq.Batch {
@@ -216,6 +258,28 @@ func joinBatches(c anyvec.Creator, batches []*anyseq.Batch) *anyseq.Batch {
 	return &anyseq.Batch{
 		Packed:  c.Concat(packed...),
 		Present: present,
+	}
+}
+
+func streamAndJoin(c anyvec.Creator, sources []<-chan *anyseq.Batch,
+	seqsPerChan []int, out chan<- *anyseq.Batch) {
+	for {
+		var batches []*anyseq.Batch
+		var gotAny bool
+		for inIdx, ch := range sources {
+			batch, ok := <-ch
+			if ok {
+				gotAny = true
+				batches = append(batches, batch)
+			} else {
+				lanes := seqsPerChan[inIdx]
+				batches = append(batches, fillerBatch(c, lanes))
+			}
+		}
+		if !gotAny {
+			return
+		}
+		out <- joinBatches(c, batches)
 	}
 }
 

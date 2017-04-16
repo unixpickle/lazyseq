@@ -1,6 +1,7 @@
 package lazyrnn
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -60,7 +61,7 @@ func mustRead(t *testing.T, expected *anyseq.Batch, chans ...<-chan *anyseq.Batc
 		timeout := time.After(time.Second)
 		select {
 		case actual := <-ch:
-			if actual != expected {
+			if !reflect.DeepEqual(actual, expected) {
 				t.Fatalf("expected %v but got %v", expected, actual)
 			}
 		case <-timeout:
