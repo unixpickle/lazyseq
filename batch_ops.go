@@ -58,25 +58,7 @@ func (p *packRes) Propagate(upstream <-chan *anyseq.Batch, grad *Grad) {
 	for _ = range p.Forward() {
 	}
 
-	downstreams := make([]chan<- *anyseq.Batch, len(p.Ins))
-	var wg sync.WaitGroup
-	for i, in := range p.Ins {
-		var needProp bool
-		grad.Use(func(g anydiff.Grad) {
-			needProp = g.Intersects(in.Vars())
-		})
-		if !needProp {
-			continue
-		}
-		wg.Add(1)
-		ch := make(chan *anyseq.Batch, 1)
-		go func(in Seq, ch <-chan *anyseq.Batch) {
-			in.Propagate(ch, grad)
-			wg.Done()
-		}(in, ch)
-		downstreams[i] = ch
-	}
-
+	downstreams, wg := propagateMany(p.Ins, grad)
 	for upBatch := range upstream {
 		for i, part := range p.splitUpstream(upBatch) {
 			if part != nil && downstreams[i] != nil {
@@ -122,8 +104,8 @@ func (p *packRes) forward(out chan<- *anyseq.Batch, done chan<- struct{}) {
 		p.V = anydiff.MergeVarSets(p.V, in.Vars())
 	}
 
-	close(out)
 	close(done)
+	close(out)
 }
 
 type packRereaderRes struct {
@@ -241,4 +223,35 @@ func joinBatches(c anyvec.Creator, batches []*anyseq.Batch) *anyseq.Batch {
 // that a sequence batch has ended.
 func fillerBatch(c anyvec.Creator, lanes int) *anyseq.Batch {
 	return &anyseq.Batch{Present: make([]bool, lanes)}
+}
+
+// propagateMany creates downstream channels for each Seq
+// and propagates through each of them asynchronously.
+// The returned sync.WaitGroup is closed when propagation
+// has completed.
+//
+// If a Seq is constant, its downstream channel will be
+// nil and it will not be propagated through.
+//
+// The caller should close all the non-nil seqs.
+func propagateMany(seqs []Seq, grad *Grad) ([]chan<- *anyseq.Batch, *sync.WaitGroup) {
+	downstreams := make([]chan<- *anyseq.Batch, len(seqs))
+	wg := &sync.WaitGroup{}
+	for i, in := range seqs {
+		var needProp bool
+		grad.Use(func(g anydiff.Grad) {
+			needProp = g.Intersects(in.Vars())
+		})
+		if !needProp {
+			continue
+		}
+		wg.Add(1)
+		ch := make(chan *anyseq.Batch, 1)
+		go func(in Seq, ch <-chan *anyseq.Batch) {
+			in.Propagate(ch, grad)
+			wg.Done()
+		}(in, ch)
+		downstreams[i] = ch
+	}
+	return downstreams, wg
 }
