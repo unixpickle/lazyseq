@@ -245,6 +245,8 @@ func (p *packedTape) countLanes() {
 	}
 }
 
+// joinBatches concatenates the batches.
+// A batch may be from fillerBatch().
 func joinBatches(c anyvec.Creator, batches []*anyseq.Batch) *anyseq.Batch {
 	var packed []anyvec.Vector
 	var present []bool
@@ -261,6 +263,12 @@ func joinBatches(c anyvec.Creator, batches []*anyseq.Batch) *anyseq.Batch {
 	}
 }
 
+// streamAndJoin reads batches from multiple sequences,
+// joins them, and sends them to out.
+//
+// The seqsPerChan argument stores the size of the Present
+// list for each source, so that filler batches can be
+// created if a source runs out before the rest.
 func streamAndJoin(c anyvec.Creator, sources []<-chan *anyseq.Batch,
 	seqsPerChan []int, out chan<- *anyseq.Batch) {
 	for {
