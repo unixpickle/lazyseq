@@ -124,7 +124,9 @@ func (m *mapNRes) Reread(start, end int) <-chan *anyseq.Batch {
 	return res
 }
 
-func (m *mapNRes) readAndApply(chans []<-chan *anyseq.Batch, out chan<- *anyseq.Batch) int {
+func (m *mapNRes) readAndApply(chans []<-chan *anyseq.Batch,
+	out chan<- *anyseq.Batch) (int, anydiff.VarSet) {
+	vars := anydiff.VarSet{}
 	var count int
 	for {
 		var ins []anydiff.Res
@@ -148,10 +150,12 @@ func (m *mapNRes) readAndApply(chans []<-chan *anyseq.Batch, out chan<- *anyseq.
 			panic("sequence length mismatch")
 		}
 		count++
-		outVec := m.F(numPres, ins...).Output()
+		res := m.F(numPres, ins...)
+		vars = anydiff.MergeVarSets(vars, res.Vars())
+		outVec := res.Output()
 		out <- &anyseq.Batch{Packed: outVec, Present: present}
 	}
-	return count
+	return count, vars
 }
 
 func (m *mapNRes) forward(out chan<- *anyseq.Batch, done chan<- struct{}) {
@@ -159,7 +163,7 @@ func (m *mapNRes) forward(out chan<- *anyseq.Batch, done chan<- struct{}) {
 	for i, x := range m.Ins {
 		inChans[i] = x.Forward()
 	}
-	m.Len = m.readAndApply(inChans, out)
+	m.Len, m.V = m.readAndApply(inChans, out)
 	for _, in := range m.Ins {
 		m.V = anydiff.MergeVarSets(m.V, in.Vars())
 	}

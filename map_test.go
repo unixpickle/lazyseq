@@ -6,6 +6,7 @@ import (
 	"github.com/unixpickle/anydiff"
 	"github.com/unixpickle/anydiff/anyseq"
 	"github.com/unixpickle/anynet/anyrnn"
+	"github.com/unixpickle/anyvec"
 	"github.com/unixpickle/anyvec/anyvec64"
 )
 
@@ -18,11 +19,18 @@ func TestMapN(t *testing.T) {
 		testSeqsLen(c, inSize, 1, 2, 0, 3, 3),
 	}
 
+	otherVar := anydiff.NewVar(c.MakeVector(1))
+	anyvec.Rand(otherVar.Vector, anyvec.Normal, nil)
+
 	f := func(n int, reses ...anydiff.Res) anydiff.Res {
-		return anydiff.Scale(
+		plainRes := anydiff.Scale(
 			anydiff.Sub(reses[0], reses[1]),
 			reses[0].Output().Creator().MakeNumeric(float64(n)),
 		)
+		// Involve some external variable so that the
+		// mapper has to pay attention to the variables
+		// of the result.
+		return anydiff.ScaleRepeated(plainRes, otherVar)
 	}
 
 	testEquivalent(t, func() anyseq.Seq {
