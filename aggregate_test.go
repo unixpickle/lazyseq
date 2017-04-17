@@ -41,3 +41,17 @@ func TestSumEach(t *testing.T) {
 	}
 	testEquivalentRes(t, actualFunc, expectedFunc)
 }
+
+func TestSum(t *testing.T) {
+	const inSize = 3
+	c := anyvec64.DefaultCreator{}
+	inSeqs := testSeqs(c, inSize)
+
+	actualFunc := func() anydiff.Res {
+		return Sum(Lazify(inSeqs))
+	}
+	expectedFunc := func() anydiff.Res {
+		return anyseq.Sum(inSeqs)
+	}
+	testEquivalentRes(t, actualFunc, expectedFunc)
+}

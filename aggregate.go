@@ -166,3 +166,27 @@ func (s *sumEachRes) presentAtTime(t int) []bool {
 	}
 	return res
 }
+
+// Sum computes the total sum of all the outputs across
+// all the sequences.
+//
+// The same uniformity requirements that apply to Mean
+// also apply to Sum.
+func Sum(seq Seq) anydiff.Res {
+	eachSum := SumEach(seq).(*sumEachRes)
+	numPres := 0
+	for _, p := range eachSum.NonEmpty {
+		if p {
+			numPres++
+		}
+	}
+	if numPres == 0 {
+		return eachSum
+	}
+	vecSize := eachSum.Output().Len() / numPres
+	return anydiff.SumRows(&anydiff.Matrix{
+		Data: eachSum,
+		Rows: numPres,
+		Cols: vecSize,
+	})
+}
