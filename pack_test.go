@@ -27,7 +27,7 @@ func TestPack(t *testing.T) {
 		for _, s := range seqs {
 			lazySeqs = append(lazySeqs, Lazify(s))
 		}
-		return Unlazify(Pack(c, lazySeqs))
+		return Unlazify(PackSeq(c, lazySeqs))
 	}, func() anyseq.Seq {
 		return packAnyseq(c, seqs)
 	})

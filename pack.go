@@ -9,7 +9,7 @@ import (
 	"github.com/unixpickle/essentials"
 )
 
-type packRes struct {
+type packSeqRes struct {
 	C   anyvec.Creator
 	Ins []Seq
 	Out <-chan *anyseq.Batch
@@ -20,13 +20,13 @@ type packRes struct {
 	V           anydiff.VarSet
 }
 
-// Pack aggregates multiple Seqs together into a single
+// PackSeq aggregates multiple Seqs together into a single
 // Seq with larger batches.
-func Pack(c anyvec.Creator, seqs []Seq) Seq {
+func PackSeq(c anyvec.Creator, seqs []Seq) Seq {
 	outChan := make(chan *anyseq.Batch, 1)
 	doneChan := make(chan struct{})
 
-	res := &packRes{
+	res := &packSeqRes{
 		C:           c,
 		Ins:         seqs,
 		Out:         outChan,
@@ -41,20 +41,20 @@ func Pack(c anyvec.Creator, seqs []Seq) Seq {
 	return res
 }
 
-func (p *packRes) Creator() anyvec.Creator {
+func (p *packSeqRes) Creator() anyvec.Creator {
 	return p.C
 }
 
-func (p *packRes) Forward() <-chan *anyseq.Batch {
+func (p *packSeqRes) Forward() <-chan *anyseq.Batch {
 	return p.Out
 }
 
-func (p *packRes) Vars() anydiff.VarSet {
+func (p *packSeqRes) Vars() anydiff.VarSet {
 	<-p.Done
 	return p.V
 }
 
-func (p *packRes) Propagate(upstream <-chan *anyseq.Batch, grad *Grad) {
+func (p *packSeqRes) Propagate(upstream <-chan *anyseq.Batch, grad *Grad) {
 	for _ = range p.Forward() {
 	}
 
@@ -76,7 +76,7 @@ func (p *packRes) Propagate(upstream <-chan *anyseq.Batch, grad *Grad) {
 	wg.Wait()
 }
 
-func (p *packRes) forward(out chan<- *anyseq.Batch, done chan<- struct{}) {
+func (p *packSeqRes) forward(out chan<- *anyseq.Batch, done chan<- struct{}) {
 	c := p.Creator()
 
 	for {
@@ -111,7 +111,7 @@ func (p *packRes) forward(out chan<- *anyseq.Batch, done chan<- struct{}) {
 // splitUpstream splits an upstream batch into upstream
 // batches for each input.
 // If an input is not present yet, its batch is nil.
-func (p *packRes) splitUpstream(upBatch *anyseq.Batch) []*anyseq.Batch {
+func (p *packSeqRes) splitUpstream(upBatch *anyseq.Batch) []*anyseq.Batch {
 	vecSize := upBatch.Packed.Len() / upBatch.NumPresent()
 	res := make([]*anyseq.Batch, len(p.Ins))
 
@@ -134,7 +134,7 @@ func (p *packRes) splitUpstream(upBatch *anyseq.Batch) []*anyseq.Batch {
 }
 
 type packRereaderRes struct {
-	*packRes
+	*packSeqRes
 	Rereaders []Rereader
 }
 
@@ -145,13 +145,13 @@ func PackRereader(c anyvec.Creator, rs []Rereader) Rereader {
 		plain[i] = x
 	}
 	return &packRereaderRes{
-		packRes:   Pack(c, plain).(*packRes),
-		Rereaders: rs,
+		packSeqRes: PackSeq(c, plain).(*packSeqRes),
+		Rereaders:  rs,
 	}
 }
 
 func (p *packRereaderRes) Reread(start, end int) <-chan *anyseq.Batch {
-	<-p.packRes.Done
+	<-p.packSeqRes.Done
 
 	if start > end || start < 0 {
 		panic("slice bounds out of range")
