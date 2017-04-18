@@ -37,13 +37,6 @@ type Tape interface {
 	ReadTape(start, end int) <-chan *anyseq.Batch
 }
 
-type referenceTape struct {
-	lock      sync.Mutex
-	timesteps []*anyseq.Batch
-	done      bool
-	nextWait  chan struct{}
-}
-
 // ReferenceTape creates a Tape that stores the outputs by
 // retaining references to all of the batches from every
 // time-step.
@@ -56,13 +49,38 @@ type referenceTape struct {
 // The caller must close the write channel to free
 // resources associated with the Tape.
 func ReferenceTape() (Tape, chan<- *anyseq.Batch) {
-	res := &referenceTape{nextWait: make(chan struct{})}
+	return newAbstractTape(func(in interface{}) *anyseq.Batch {
+		return in.(*anyseq.Batch)
+	}, func(b *anyseq.Batch) interface{} {
+		return b
+	})
+}
+
+// abstractTape is a tape of abstract objects which can be
+// converted to and from *anyseq.Batch.
+type abstractTape struct {
+	lock      sync.Mutex
+	timesteps []interface{}
+	done      bool
+	nextWait  chan struct{}
+
+	toBatch   func(in interface{}) *anyseq.Batch
+	fromBatch func(b *anyseq.Batch) interface{}
+}
+
+func newAbstractTape(to func(in interface{}) *anyseq.Batch,
+	from func(b *anyseq.Batch) interface{}) (Tape, chan<- *anyseq.Batch) {
+	res := &abstractTape{
+		nextWait:  make(chan struct{}),
+		toBatch:   to,
+		fromBatch: from,
+	}
 	inChan := make(chan *anyseq.Batch, 1)
 	go res.readInputs(inChan)
 	return res, inChan
 }
 
-func (r *referenceTape) ReadTape(start, end int) <-chan *anyseq.Batch {
+func (a *abstractTape) ReadTape(start, end int) <-chan *anyseq.Batch {
 	if start < 0 {
 		panic("negative start index")
 	} else if end < start && end != -1 {
@@ -73,26 +91,26 @@ func (r *referenceTape) ReadTape(start, end int) <-chan *anyseq.Batch {
 	go func() {
 		defer close(res)
 		for i := start; i < end || end == -1; i++ {
-			r.lock.Lock()
-			for i >= len(r.timesteps) {
-				if r.done {
-					r.lock.Unlock()
+			a.lock.Lock()
+			for i >= len(a.timesteps) {
+				if a.done {
+					a.lock.Unlock()
 					return
 				}
-				waiter := r.nextWait
-				r.lock.Unlock()
+				waiter := a.nextWait
+				a.lock.Unlock()
 				<-waiter
-				r.lock.Lock()
+				a.lock.Lock()
 			}
-			item := r.timesteps[i]
-			r.lock.Unlock()
-			res <- item
+			item := a.timesteps[i]
+			a.lock.Unlock()
+			res <- a.toBatch(item)
 		}
 	}()
 	return res
 }
 
-func (r *referenceTape) readInputs(inChan <-chan *anyseq.Batch) {
+func (a *abstractTape) readInputs(inChan <-chan *anyseq.Batch) {
 	var lastPresent []bool
 	for input := range inChan {
 		if lastPresent == nil {
@@ -109,14 +127,15 @@ func (r *referenceTape) readInputs(inChan <-chan *anyseq.Batch) {
 			}
 			lastPresent = input.Present
 		}
-		r.lock.Lock()
-		r.timesteps = append(r.timesteps, input)
-		close(r.nextWait)
-		r.nextWait = make(chan struct{})
-		r.lock.Unlock()
+		inObj := a.fromBatch(input)
+		a.lock.Lock()
+		a.timesteps = append(a.timesteps, inObj)
+		close(a.nextWait)
+		a.nextWait = make(chan struct{})
+		a.lock.Unlock()
 	}
-	r.lock.Lock()
-	r.done = true
-	close(r.nextWait)
-	r.lock.Unlock()
+	a.lock.Lock()
+	a.done = true
+	close(a.nextWait)
+	a.lock.Unlock()
 }
