@@ -6,11 +6,18 @@ import (
 	"time"
 
 	"github.com/unixpickle/anydiff/anyseq"
+	"github.com/unixpickle/anyvec"
+	"github.com/unixpickle/anyvec/anyvec64"
 	"github.com/unixpickle/lazyseq"
 )
 
 func TestReferenceTape(t *testing.T) {
 	tape, writer := lazyseq.ReferenceTape()
+	testTapeOps(t, anyvec64.DefaultCreator{}, tape, writer)
+}
+
+func testTapeOps(t *testing.T, c anyvec.Creator, tape lazyseq.Tape,
+	writer chan<- *anyseq.Batch) {
 	readers := []<-chan *anyseq.Batch{
 		tape.ReadTape(1, 3),
 		tape.ReadTape(2, 5),
@@ -23,6 +30,10 @@ func TestReferenceTape(t *testing.T) {
 		{Present: []bool{true, false, false}},
 		{Present: []bool{true, false, false}},
 		{Present: []bool{false, false, false}},
+	}
+	for _, b := range batches {
+		b.Packed = c.MakeVector(b.NumPresent() * 3)
+		anyvec.Rand(b.Packed, anyvec.Normal, nil)
 	}
 	writer <- batches[0]
 
