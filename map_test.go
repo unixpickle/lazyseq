@@ -72,7 +72,7 @@ func TestMapNReread(t *testing.T) {
 			lazySeqs = append(lazySeqs, Lazify(s))
 		}
 		seq := MapN(f, lazySeqs...)
-		return Unlazify(FixedHSM(3, seq, block))
+		return Unlazify(FixedHSM(3, true, seq, block))
 	}, func() anyseq.Seq {
 		seq := anyseq.MapN(f, seqs...)
 		return anyrnn.Map(seq, block)

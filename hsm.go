@@ -4,6 +4,7 @@ import (
 	"github.com/unixpickle/anydiff"
 	"github.com/unixpickle/anydiff/anyseq"
 	"github.com/unixpickle/anynet/anyrnn"
+	"github.com/unixpickle/essentials"
 )
 
 // FixedHSM uses fixed-interval hidden state memorization
@@ -15,8 +16,11 @@ import (
 // In this case, the algorithm is equivalent to Chen's
 // sqrt(T) algorithm, and it will use O(sqrt(T)) memory.
 // See https://arxiv.org/abs/1604.06174.
-func FixedHSM(intervalSize int, in Rereader, b anyrnn.Block) Seq {
-	return RecursiveHSM(intervalSize, intervalSize+1, in, b)
+//
+// If lazyBPTT is true, then back-propagation will never
+// store more internal states or inputs than it needs to.
+func FixedHSM(intervalSize int, lazyBPTT bool, in Rereader, b anyrnn.Block) Seq {
+	return RecursiveHSM(intervalSize, intervalSize+1, lazyBPTT, in, b)
 }
 
 // RecursiveHSM uses recursive hidden state memorization
@@ -31,7 +35,11 @@ func FixedHSM(intervalSize int, in Rereader, b anyrnn.Block) Seq {
 // recommended to use T/numPartitions as the intervalSize.
 // In this case, the algorithm uses O(log(T)) memory and
 // O(T*log(T)) time.
-func RecursiveHSM(intervalSize, numPartitions int, in Rereader, b anyrnn.Block) Seq {
+//
+// If lazyBPTT is true, then back-propagation will never
+// store more internal states or inputs than it needs to.
+func RecursiveHSM(intervalSize, numPartitions int, lazyBPTT bool, in Rereader,
+	b anyrnn.Block) Seq {
 	if intervalSize < 1 {
 		panic("invalid interval size")
 	}
@@ -42,7 +50,7 @@ func RecursiveHSM(intervalSize, numPartitions int, in Rereader, b anyrnn.Block) 
 		Forward:  in.Forward(),
 		Rereader: in,
 	}
-	frag := recHSM(intervalSize, numPartitions, inFrag, b, nil)
+	frag := recHSM(intervalSize, numPartitions, lazyBPTT, inFrag, b, nil)
 	return rnnFragmentToSeq(in, b, frag)
 }
 
@@ -51,8 +59,8 @@ func RecursiveHSM(intervalSize, numPartitions int, in Rereader, b anyrnn.Block) 
 //
 // The start argument may be nil if this is the beginning
 // of the sequence.
-func recHSM(interval, partitions int, in *rereaderFragment, block anyrnn.Block,
-	start anyrnn.State) rnnFragment {
+func recHSM(interval, partitions int, lazyBPTT bool, in *rereaderFragment,
+	block anyrnn.Block, start anyrnn.State) rnnFragment {
 	outChan := make(chan *anyseq.Batch, 1)
 	doneChan := make(chan struct{})
 	res := &recHSMFrag{
@@ -60,6 +68,7 @@ func recHSM(interval, partitions int, in *rereaderFragment, block anyrnn.Block,
 		Out:        outChan,
 		Partitions: partitions,
 		Interval:   interval,
+		LazyBPTT:   lazyBPTT,
 		Block:      block,
 		Done:       doneChan,
 	}
@@ -73,6 +82,7 @@ type recHSMFrag struct {
 	Out        <-chan *anyseq.Batch
 	Partitions int
 	Interval   int
+	LazyBPTT   bool
 	Block      anyrnn.Block
 
 	// Fields become valid after done is closed.
@@ -108,21 +118,18 @@ func (r *recHSMFrag) Propagate(down chan<- *anyseq.Batch, up <-chan *anyseq.Batc
 
 func (r *recHSMFrag) subFragment(start, end int, state anyrnn.State) rnnFragment {
 	inChan := r.In.Rereader.Reread(start+r.In.Offset, end+r.In.Offset)
-	// In the case where end-start == r.Partitions, we don't use
-	// BPTT because HSM still uses less memory since it doesn't
-	// store internal RNN states.
-	if end-start < r.Partitions {
+	if end-start <= 1 || (end-start <= r.Partitions && !r.LazyBPTT) {
 		return bptt(inChan, r.Block, state)
 	} else {
 		// TODO: look into different ways of determining interval,
 		// i.e. different rounding strategies.
-		interval := (end - start) / r.Partitions
+		interval := essentials.MaxInt(1, (end-start)/r.Partitions)
 		inFrag := &rereaderFragment{
 			Offset:   r.In.Offset + start,
 			Forward:  inChan,
 			Rereader: r.In.Rereader,
 		}
-		return recHSM(interval, r.Partitions, inFrag, r.Block, state)
+		return recHSM(interval, r.Partitions, r.LazyBPTT, inFrag, r.Block, state)
 	}
 }
 

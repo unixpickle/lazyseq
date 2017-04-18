@@ -18,16 +18,18 @@ func TestFixedHSMEquiv(t *testing.T) {
 	block := anyrnn.NewLSTM(c, inSize, outSize)
 
 	for interval := 1; interval < 10; interval++ {
-		t.Run(fmt.Sprintf("Interval%d", interval), func(t *testing.T) {
-			inSeqs := testSeqs(c, inSize)
-			actualFunc := func() anyseq.Seq {
-				return Unlazify(FixedHSM(interval, Lazify(inSeqs), block))
-			}
-			expectedFunc := func() anyseq.Seq {
-				return anyrnn.Map(inSeqs, block)
-			}
-			testEquivalent(t, actualFunc, expectedFunc)
-		})
+		for _, lazy := range []bool{false, true} {
+			t.Run(fmt.Sprintf("Interval%d:%v", interval, lazy), func(t *testing.T) {
+				inSeqs := testSeqs(c, inSize)
+				actualFunc := func() anyseq.Seq {
+					return Unlazify(FixedHSM(interval, lazy, Lazify(inSeqs), block))
+				}
+				expectedFunc := func() anyseq.Seq {
+					return anyrnn.Map(inSeqs, block)
+				}
+				testEquivalent(t, actualFunc, expectedFunc)
+			})
+		}
 	}
 }
 
@@ -41,17 +43,20 @@ func TestRecursiveHSMEquiv(t *testing.T) {
 
 	for interval := 1; interval < 10; interval++ {
 		for partition := 2; partition < 10; partition++ {
-			t.Run(fmt.Sprintf("%d:%d", interval, partition), func(t *testing.T) {
-				inSeqs := testSeqs(c, inSize)
-				actualFunc := func() anyseq.Seq {
-					return Unlazify(RecursiveHSM(interval, partition,
-						Lazify(inSeqs), block))
-				}
-				expectedFunc := func() anyseq.Seq {
-					return anyrnn.Map(inSeqs, block)
-				}
-				testEquivalent(t, actualFunc, expectedFunc)
-			})
+			for _, lazy := range []bool{false, true} {
+				name := fmt.Sprintf("%d:%d:%v", interval, partition, lazy)
+				t.Run(name, func(t *testing.T) {
+					inSeqs := testSeqs(c, inSize)
+					actualFunc := func() anyseq.Seq {
+						return Unlazify(RecursiveHSM(interval, partition,
+							lazy, Lazify(inSeqs), block))
+					}
+					expectedFunc := func() anyseq.Seq {
+						return anyrnn.Map(inSeqs, block)
+					}
+					testEquivalent(t, actualFunc, expectedFunc)
+				})
+			}
 		}
 	}
 }

@@ -54,7 +54,7 @@ func TestPackRereader(t *testing.T) {
 		for _, s := range seqs {
 			lazySeqs = append(lazySeqs, Lazify(s))
 		}
-		return Unlazify(FixedHSM(3, PackRereader(c, lazySeqs), block))
+		return Unlazify(FixedHSM(3, true, PackRereader(c, lazySeqs), block))
 	}, func() anyseq.Seq {
 		return anyrnn.Map(packAnyseq(c, seqs), block)
 	})
