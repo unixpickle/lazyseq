@@ -1,4 +1,4 @@
-package lazyrnn
+package test
 
 import (
 	"testing"
@@ -6,6 +6,7 @@ import (
 	"github.com/unixpickle/anydiff"
 	"github.com/unixpickle/anydiff/anyseq"
 	"github.com/unixpickle/anyvec/anyvec64"
+	"github.com/unixpickle/lazyseq"
 )
 
 func TestMean(t *testing.T) {
@@ -19,7 +20,7 @@ func TestMean(t *testing.T) {
 	}
 
 	actualFunc := func() anydiff.Res {
-		return Mean(Lazify(inSeqs))
+		return lazyseq.Mean(lazyseq.Lazify(inSeqs))
 	}
 	expectedFunc := func() anydiff.Res {
 		return anydiff.Scale(anyseq.Sum(inSeqs),
@@ -34,7 +35,7 @@ func TestSumEach(t *testing.T) {
 	inSeqs := testSeqs(c, inSize)
 
 	actualFunc := func() anydiff.Res {
-		return SumEach(Lazify(inSeqs))
+		return lazyseq.SumEach(lazyseq.Lazify(inSeqs))
 	}
 	expectedFunc := func() anydiff.Res {
 		return anyseq.SumEach(inSeqs)

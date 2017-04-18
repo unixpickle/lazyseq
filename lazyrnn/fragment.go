@@ -7,6 +7,7 @@ import (
 	"github.com/unixpickle/anydiff/anyseq"
 	"github.com/unixpickle/anynet/anyrnn"
 	"github.com/unixpickle/anyvec"
+	"github.com/unixpickle/lazyseq"
 )
 
 // An rnnFragment is the result of running an RNN on a
@@ -37,7 +38,7 @@ type rnnFragment interface {
 	//
 	// The downstream state is returned.
 	Propagate(down chan<- *anyseq.Batch, up <-chan *anyseq.Batch,
-		stateUp anyrnn.StateGrad, grad *Grad) anyrnn.StateGrad
+		stateUp anyrnn.StateGrad, grad *lazyseq.Grad) anyrnn.StateGrad
 }
 
 // rereaderFragment represents a fragment of a Rereader.
@@ -53,10 +54,10 @@ type rereaderFragment struct {
 	// Use once before using the Rereader field.
 	Forward <-chan *anyseq.Batch
 
-	Rereader Rereader
+	Rereader lazyseq.Rereader
 }
 
-func rnnFragmentToSeq(in Seq, block anyrnn.Block, r rnnFragment) Seq {
+func rnnFragmentToSeq(in lazyseq.Seq, block anyrnn.Block, r rnnFragment) lazyseq.Seq {
 	return &rnnFragSeq{
 		In:    in,
 		Block: block,
@@ -65,7 +66,7 @@ func rnnFragmentToSeq(in Seq, block anyrnn.Block, r rnnFragment) Seq {
 }
 
 type rnnFragSeq struct {
-	In    Seq
+	In    lazyseq.Seq
 	Block anyrnn.Block
 	Frag  rnnFragment
 
@@ -90,7 +91,7 @@ func (r *rnnFragSeq) Vars() anydiff.VarSet {
 	return r.V
 }
 
-func (r *rnnFragSeq) Propagate(u <-chan *anyseq.Batch, grad *Grad) {
+func (r *rnnFragSeq) Propagate(u <-chan *anyseq.Batch, grad *lazyseq.Grad) {
 	for _ = range r.Forward() {
 	}
 
@@ -126,7 +127,7 @@ func (r *rnnFragSeq) Propagate(u <-chan *anyseq.Batch, grad *Grad) {
 	wg.Wait()
 }
 
-func (r *rnnFragSeq) propagateStart(nextGrad anyrnn.StateGrad, grad *Grad) {
+func (r *rnnFragSeq) propagateStart(nextGrad anyrnn.StateGrad, grad *lazyseq.Grad) {
 	numSeqs := len(nextGrad.Present())
 	if nextGrad.Present().NumPresent() != numSeqs {
 		allTrue := make(anyrnn.PresentMap, numSeqs)

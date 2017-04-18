@@ -1,4 +1,4 @@
-package lazyrnn
+package lazyseq
 
 import (
 	"github.com/unixpickle/anydiff"

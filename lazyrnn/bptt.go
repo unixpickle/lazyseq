@@ -5,6 +5,7 @@ import (
 	"github.com/unixpickle/anydiff/anyseq"
 	"github.com/unixpickle/anynet/anyrnn"
 	"github.com/unixpickle/anyvec"
+	"github.com/unixpickle/lazyseq"
 )
 
 func bptt(in <-chan *anyseq.Batch, block anyrnn.Block, start anyrnn.State) rnnFragment {
@@ -56,7 +57,7 @@ func (b *bpttFrag) Vars() anydiff.VarSet {
 }
 
 func (b *bpttFrag) Propagate(down chan<- *anyseq.Batch, up <-chan *anyseq.Batch,
-	stateUp anyrnn.StateGrad, grad *Grad) anyrnn.StateGrad {
+	stateUp anyrnn.StateGrad, grad *lazyseq.Grad) anyrnn.StateGrad {
 	for _ = range b.forward {
 	}
 

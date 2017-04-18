@@ -5,6 +5,7 @@ import (
 	"github.com/unixpickle/anydiff/anyseq"
 	"github.com/unixpickle/anynet/anyrnn"
 	"github.com/unixpickle/essentials"
+	"github.com/unixpickle/lazyseq"
 )
 
 // FixedHSM uses fixed-interval hidden state memorization
@@ -19,7 +20,8 @@ import (
 //
 // If lazyBPTT is true, then back-propagation will never
 // store more internal states or inputs than it needs to.
-func FixedHSM(intervalSize int, lazyBPTT bool, in Rereader, b anyrnn.Block) Seq {
+func FixedHSM(intervalSize int, lazyBPTT bool, in lazyseq.Rereader,
+	b anyrnn.Block) lazyseq.Seq {
 	return RecursiveHSM(intervalSize, intervalSize+1, lazyBPTT, in, b)
 }
 
@@ -38,8 +40,8 @@ func FixedHSM(intervalSize int, lazyBPTT bool, in Rereader, b anyrnn.Block) Seq 
 //
 // If lazyBPTT is true, then back-propagation will never
 // store more internal states or inputs than it needs to.
-func RecursiveHSM(intervalSize, numPartitions int, lazyBPTT bool, in Rereader,
-	b anyrnn.Block) Seq {
+func RecursiveHSM(intervalSize, numPartitions int, lazyBPTT bool,
+	in lazyseq.Rereader, b anyrnn.Block) lazyseq.Seq {
 	if intervalSize < 1 {
 		panic("invalid interval size")
 	}
@@ -102,7 +104,7 @@ func (r *recHSMFrag) Vars() anydiff.VarSet {
 }
 
 func (r *recHSMFrag) Propagate(down chan<- *anyseq.Batch, up <-chan *anyseq.Batch,
-	stateUp anyrnn.StateGrad, grad *Grad) anyrnn.StateGrad {
+	stateUp anyrnn.StateGrad, grad *lazyseq.Grad) anyrnn.StateGrad {
 	for _ = range r.Forward() {
 	}
 

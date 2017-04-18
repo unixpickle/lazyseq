@@ -1,4 +1,4 @@
-package lazyrnn
+package lazyseq
 
 import (
 	"sync"

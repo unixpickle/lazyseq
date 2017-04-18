@@ -1,6 +1,6 @@
-// Package lazyrnn evaluates and trains RNNs on limited
+// Package lazyseq evaluates and trains RNNs on limited
 // memory systems.
-package lazyrnn
+package lazyseq
 
 import (
 	"sync"

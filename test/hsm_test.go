@@ -1,4 +1,4 @@
-package lazyrnn
+package test
 
 import (
 	"fmt"
