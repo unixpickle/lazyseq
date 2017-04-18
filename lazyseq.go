@@ -1,5 +1,8 @@
-// Package lazyseq evaluates and trains RNNs on limited
-// memory systems.
+// Package lazyseq provides abstractions and utilities for
+// dealing with lazy sequences of differentiable vectors.
+// It is designed to be used with recurrent neural
+// networks via the lazyrnn sub-package, but that is not
+// the only possible use for it.
 package lazyseq
 
 import (
