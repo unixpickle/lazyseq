@@ -9,6 +9,8 @@ import (
 	"github.com/unixpickle/anyvec"
 	"github.com/unixpickle/anyvec/anyvec64"
 	"github.com/unixpickle/essentials"
+	"github.com/unixpickle/lazyseq"
+	"github.com/unixpickle/lazyseq/lazyrnn"
 )
 
 func TestPack(t *testing.T) {
@@ -23,11 +25,11 @@ func TestPack(t *testing.T) {
 	}
 
 	testEquivalent(t, func() anyseq.Seq {
-		var lazySeqs []Seq
+		var lazySeqs []lazyseq.Seq
 		for _, s := range seqs {
-			lazySeqs = append(lazySeqs, Lazify(s))
+			lazySeqs = append(lazySeqs, lazyseq.Lazify(s))
 		}
-		return Unlazify(PackSeq(c, lazySeqs))
+		return lazyseq.Unlazify(lazyseq.PackSeq(c, lazySeqs))
 	}, func() anyseq.Seq {
 		return packAnyseq(c, seqs)
 	})
@@ -50,11 +52,12 @@ func TestPackRereader(t *testing.T) {
 	block := anyrnn.NewLSTM(c, inSize, outSize)
 
 	testEquivalent(t, func() anyseq.Seq {
-		var lazySeqs []Rereader
+		var lazySeqs []lazyseq.Rereader
 		for _, s := range seqs {
-			lazySeqs = append(lazySeqs, Lazify(s))
+			lazySeqs = append(lazySeqs, lazyseq.Lazify(s))
 		}
-		return Unlazify(FixedHSM(3, true, PackRereader(c, lazySeqs), block))
+		return lazyseq.Unlazify(lazyrnn.FixedHSM(3, true,
+			lazyseq.PackRereader(c, lazySeqs), block))
 	}, func() anyseq.Seq {
 		return anyrnn.Map(packAnyseq(c, seqs), block)
 	})
@@ -63,11 +66,11 @@ func TestPackRereader(t *testing.T) {
 func TestPackTape(t *testing.T) {
 	c := anyvec64.DefaultCreator{}
 
-	tape1, writer1 := ReferenceTape()
-	tape2, writer2 := ReferenceTape()
-	tape3, writer3 := ReferenceTape()
+	tape1, writer1 := lazyseq.ReferenceTape()
+	tape2, writer2 := lazyseq.ReferenceTape()
+	tape3, writer3 := lazyseq.ReferenceTape()
 
-	joined := PackTape([]Tape{tape1, tape2, tape3})
+	joined := lazyseq.PackTape([]lazyseq.Tape{tape1, tape2, tape3})
 
 	inBatches := []*anyseq.Batch{
 		{Present: []bool{true, false, true}},

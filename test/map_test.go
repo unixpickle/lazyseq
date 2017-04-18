@@ -8,6 +8,8 @@ import (
 	"github.com/unixpickle/anynet/anyrnn"
 	"github.com/unixpickle/anyvec"
 	"github.com/unixpickle/anyvec/anyvec64"
+	"github.com/unixpickle/lazyseq"
+	"github.com/unixpickle/lazyseq/lazyrnn"
 )
 
 func TestMapN(t *testing.T) {
@@ -34,11 +36,11 @@ func TestMapN(t *testing.T) {
 	}
 
 	testEquivalent(t, func() anyseq.Seq {
-		var lazySeqs []Rereader
+		var lazySeqs []lazyseq.Rereader
 		for _, s := range seqs {
-			lazySeqs = append(lazySeqs, Lazify(s))
+			lazySeqs = append(lazySeqs, lazyseq.Lazify(s))
 		}
-		return Unlazify(MapN(f, lazySeqs...))
+		return lazyseq.Unlazify(lazyseq.MapN(f, lazySeqs...))
 	}, func() anyseq.Seq {
 		return anyseq.MapN(f, seqs...)
 	})
@@ -67,12 +69,12 @@ func TestMapNReread(t *testing.T) {
 	}
 
 	testEquivalent(t, func() anyseq.Seq {
-		var lazySeqs []Rereader
+		var lazySeqs []lazyseq.Rereader
 		for _, s := range seqs {
-			lazySeqs = append(lazySeqs, Lazify(s))
+			lazySeqs = append(lazySeqs, lazyseq.Lazify(s))
 		}
-		seq := MapN(f, lazySeqs...)
-		return Unlazify(FixedHSM(3, true, seq, block))
+		seq := lazyseq.MapN(f, lazySeqs...)
+		return lazyseq.Unlazify(lazyrnn.FixedHSM(3, true, seq, block))
 	}, func() anyseq.Seq {
 		seq := anyseq.MapN(f, seqs...)
 		return anyrnn.Map(seq, block)

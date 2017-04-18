@@ -6,10 +6,11 @@ import (
 	"time"
 
 	"github.com/unixpickle/anydiff/anyseq"
+	"github.com/unixpickle/lazyseq"
 )
 
 func TestReferenceTape(t *testing.T) {
-	tape, writer := ReferenceTape()
+	tape, writer := lazyseq.ReferenceTape()
 	readers := []<-chan *anyseq.Batch{
 		tape.ReadTape(1, 3),
 		tape.ReadTape(2, 5),

@@ -49,7 +49,7 @@ func TestSum(t *testing.T) {
 	inSeqs := testSeqs(c, inSize)
 
 	actualFunc := func() anydiff.Res {
-		return Sum(Lazify(inSeqs))
+		return lazyseq.Sum(lazyseq.Lazify(inSeqs))
 	}
 	expectedFunc := func() anydiff.Res {
 		return anyseq.Sum(inSeqs)
