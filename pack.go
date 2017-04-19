@@ -54,7 +54,7 @@ func (p *packSeqRes) Vars() anydiff.VarSet {
 	return p.V
 }
 
-func (p *packSeqRes) Propagate(upstream <-chan *anyseq.Batch, grad *Grad) {
+func (p *packSeqRes) Propagate(upstream <-chan *anyseq.Batch, grad Grad) {
 	for _ = range p.Forward() {
 	}
 
@@ -306,7 +306,7 @@ func fillerBatch(c anyvec.Creator, lanes int) *anyseq.Batch {
 // nil and it will not be propagated through.
 //
 // The caller should close all the non-nil seqs.
-func propagateMany(seqs []Seq, grad *Grad) ([]chan<- *anyseq.Batch, *sync.WaitGroup) {
+func propagateMany(seqs []Seq, grad Grad) ([]chan<- *anyseq.Batch, *sync.WaitGroup) {
 	downstreams := make([]chan<- *anyseq.Batch, len(seqs))
 	wg := &sync.WaitGroup{}
 	for i, in := range seqs {

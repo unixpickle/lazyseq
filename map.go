@@ -71,7 +71,7 @@ func (m *mapNRes) Vars() anydiff.VarSet {
 	return m.V
 }
 
-func (m *mapNRes) Propagate(upstream <-chan *anyseq.Batch, grad *Grad) {
+func (m *mapNRes) Propagate(upstream <-chan *anyseq.Batch, grad Grad) {
 	for _ = range m.Forward() {
 	}
 
@@ -175,7 +175,7 @@ func (m *mapNRes) forward(out chan<- *anyseq.Batch, done chan<- struct{}) {
 // through the result, and returns the downstream
 // gradient.
 func (m *mapNRes) propThroughF(ins []<-chan *anyseq.Batch, upstream *anyseq.Batch,
-	grad *Grad) []*anyseq.Batch {
+	grad Grad) []*anyseq.Batch {
 	var batchSize int
 	var present []bool
 	inReses := make([]anydiff.Res, len(m.Ins))

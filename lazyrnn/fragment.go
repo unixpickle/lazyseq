@@ -38,7 +38,7 @@ type rnnFragment interface {
 	//
 	// The downstream state is returned.
 	Propagate(down chan<- *anyseq.Batch, up <-chan *anyseq.Batch,
-		stateUp anyrnn.StateGrad, grad *lazyseq.Grad) anyrnn.StateGrad
+		stateUp anyrnn.StateGrad, grad lazyseq.Grad) anyrnn.StateGrad
 }
 
 // rereaderFragment represents a fragment of a Rereader.
@@ -91,7 +91,7 @@ func (r *rnnFragSeq) Vars() anydiff.VarSet {
 	return r.V
 }
 
-func (r *rnnFragSeq) Propagate(u <-chan *anyseq.Batch, grad *lazyseq.Grad) {
+func (r *rnnFragSeq) Propagate(u <-chan *anyseq.Batch, grad lazyseq.Grad) {
 	for _ = range r.Forward() {
 	}
 
@@ -127,7 +127,7 @@ func (r *rnnFragSeq) Propagate(u <-chan *anyseq.Batch, grad *lazyseq.Grad) {
 	wg.Wait()
 }
 
-func (r *rnnFragSeq) propagateStart(nextGrad anyrnn.StateGrad, grad *lazyseq.Grad) {
+func (r *rnnFragSeq) propagateStart(nextGrad anyrnn.StateGrad, grad lazyseq.Grad) {
 	numSeqs := len(nextGrad.Present())
 	if nextGrad.Present().NumPresent() != numSeqs {
 		allTrue := make(anyrnn.PresentMap, numSeqs)

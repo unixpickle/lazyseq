@@ -104,7 +104,7 @@ func (r *recHSMFrag) Vars() anydiff.VarSet {
 }
 
 func (r *recHSMFrag) Propagate(down chan<- *anyseq.Batch, up <-chan *anyseq.Batch,
-	stateUp anyrnn.StateGrad, grad *lazyseq.Grad) anyrnn.StateGrad {
+	stateUp anyrnn.StateGrad, grad lazyseq.Grad) anyrnn.StateGrad {
 	for _ = range r.Forward() {
 	}
 

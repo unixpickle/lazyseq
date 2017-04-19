@@ -34,7 +34,7 @@ func (l *lazifySeq) Vars() anydiff.VarSet {
 	return l.Seq.Vars()
 }
 
-func (l *lazifySeq) Propagate(upstream <-chan *anyseq.Batch, grad *Grad) {
+func (l *lazifySeq) Propagate(upstream <-chan *anyseq.Batch, grad Grad) {
 	uList := make([]*anyseq.Batch, len(l.Seq.Output()))
 	for i := len(uList) - 1; i >= 0; i-- {
 		var ok bool
@@ -127,7 +127,7 @@ func (t *tapeRereader) Vars() anydiff.VarSet {
 	return anydiff.VarSet{}
 }
 
-func (t *tapeRereader) Propagate(upstream <-chan *anyseq.Batch, grad *Grad) {
+func (t *tapeRereader) Propagate(upstream <-chan *anyseq.Batch, grad Grad) {
 	// Users may depend on Propagate cleaning up the
 	// resources held by t.Forward() not being read.
 	for _ = range t.Forward() {
