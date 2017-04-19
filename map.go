@@ -10,9 +10,9 @@ import (
 //
 // When f is called, it is given the batch size and the
 // packed batch vector.
-func Map(seq Rereader, f func(n int, v anydiff.Res) anydiff.Res) Rereader {
+func Map(seq Rereader, f func(v anydiff.Res, n int) anydiff.Res) Rereader {
 	return MapN(func(n int, v ...anydiff.Res) anydiff.Res {
-		return f(n, v[0])
+		return f(v[0], n)
 	}, seq)
 }
 
