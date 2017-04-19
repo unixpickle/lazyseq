@@ -43,3 +43,27 @@ func BenchmarkCompressedTape(b *testing.B) {
 		close(writer)
 	}
 }
+
+func BenchmarkCompressedTapeRead(b *testing.B) {
+	c := anyvec32.DefaultCreator{}
+
+	// Simulate compressing 16 frames from Atari Pong.
+	batch := &anyseq.Batch{
+		Present: make([]bool, 16),
+		Packed:  c.MakeVector(160 * 210 * 16),
+	}
+	for i := range batch.Present {
+		batch.Present[i] = true
+	}
+
+	tape, writer := lazyseq.CompressedTape(flate.DefaultCompression)
+	writer <- batch
+	close(writer)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		r := tape.ReadTape(0, 1)
+		<-r
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 	"sync"
 
 	"github.com/unixpickle/anydiff/anyseq"
@@ -95,18 +96,28 @@ func (c *compressedBatch) Decompress(cr anyvec.Creator) *anyseq.Batch {
 		panic(err)
 	}
 
-	var vec anyvec.NumericList
+	var numList anyvec.NumericList
 	if c.Float32 {
-		vec = make([]float32, origData.Len()/4)
+		// This takes 25% as much time as a pure binary.Read()
+		// on my machine.
+		vec := make([]float32, origData.Len()/4)
+		origBytes := origData.Bytes()
+		for i := 0; i+4 <= len(origBytes); i += 4 {
+			vec[i>>2] = math.Float32frombits(uint32(origBytes[i]) |
+				(uint32(origBytes[i+1]) << 8) |
+				(uint32(origBytes[i+2]) << 16) |
+				(uint32(origBytes[i+3]) << 24))
+		}
+		numList = vec
 	} else {
-		vec = make([]float64, origData.Len()/8)
-	}
-	if err := binary.Read(&origData, binary.LittleEndian, vec); err != nil {
-		panic(err)
+		numList = make([]float64, origData.Len()/8)
+		if err := binary.Read(&origData, binary.LittleEndian, numList); err != nil {
+			panic(err)
+		}
 	}
 
 	return &anyseq.Batch{
 		Present: c.Present,
-		Packed:  cr.MakeVectorData(vec),
+		Packed:  cr.MakeVectorData(numList),
 	}
 }
