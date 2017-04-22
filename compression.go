@@ -59,16 +59,26 @@ type compressedBatch struct {
 }
 
 func compressBatch(level int, b *anyseq.Batch) *compressedBatch {
-	var binaryData bytes.Buffer
+	binaryData := &bytes.Buffer{}
 	vecData := b.Packed.Data()
-	_, is32Bit := vecData.([]float32)
-	if !is32Bit {
-		if _, ok := vecData.([]float64); !ok {
-			panic(fmt.Sprintf("CompressedTape: unsupported anyvec.NumericList: %T",
-				vecData))
+	list32, is32Bit := vecData.([]float32)
+	if is32Bit {
+		encoded := make([]byte, len(list32)*4)
+		for i, num := range list32 {
+			data := math.Float32bits(num)
+			idx := i << 2
+			encoded[idx] = byte(data)
+			encoded[idx+1] = byte(data >> 8)
+			encoded[idx+2] = byte(data >> 16)
+			encoded[idx+3] = byte(data >> 24)
 		}
+		binaryData = bytes.NewBuffer(encoded)
+	} else if _, ok := vecData.([]float64); ok {
+		binary.Write(binaryData, binary.LittleEndian, vecData)
+	} else {
+		panic(fmt.Sprintf("CompressedTape: unsupported anyvec.NumericList: %T",
+			vecData))
 	}
-	binary.Write(&binaryData, binary.LittleEndian, vecData)
 
 	var compressedData bytes.Buffer
 	w, err := flate.NewWriter(&compressedData, level)
@@ -78,7 +88,7 @@ func compressBatch(level int, b *anyseq.Batch) *compressedBatch {
 		panic(err)
 	}
 
-	io.Copy(w, &binaryData)
+	io.Copy(w, binaryData)
 	w.Close()
 
 	return &compressedBatch{
