@@ -13,11 +13,11 @@ import (
 
 func TestReferenceTape(t *testing.T) {
 	tape, writer := lazyseq.ReferenceTape()
-	testTapeOps(t, anyvec64.DefaultCreator{}, tape, writer)
+	testTapeOps(t, anyvec64.DefaultCreator{}, tape, writer, nil)
 }
 
 func testTapeOps(t *testing.T, c anyvec.Creator, tape lazyseq.Tape,
-	writer chan<- *anyseq.Batch) {
+	writer chan<- *anyseq.Batch, randomize func(anyvec.Vector)) {
 	readers := []<-chan *anyseq.Batch{
 		tape.ReadTape(1, 3),
 		tape.ReadTape(2, 5),
@@ -33,7 +33,11 @@ func testTapeOps(t *testing.T, c anyvec.Creator, tape lazyseq.Tape,
 	}
 	for _, b := range batches {
 		b.Packed = c.MakeVector(b.NumPresent() * 3)
-		anyvec.Rand(b.Packed, anyvec.Normal, nil)
+		if randomize != nil {
+			randomize(b.Packed)
+		} else {
+			anyvec.Rand(b.Packed, anyvec.Normal, nil)
+		}
 	}
 	writer <- batches[0]
 
