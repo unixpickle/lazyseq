@@ -140,3 +140,51 @@ func (t *tapeRereader) Propagate(upstream <-chan *anyseq.Batch, grad Grad) {
 func (t *tapeRereader) Reread(start, end int) <-chan *anyseq.Batch {
 	return t.Tape.ReadTape(start, end)
 }
+
+type seqRereader struct {
+	In   Seq
+	Tape Tape
+	Out  <-chan *anyseq.Batch
+}
+
+// SeqRereader converts a Seq to a Rereader by storing the
+// Seq's outputs to a Tape.
+//
+// For an example of creating a Tape with a corresponding
+// writer channel, see ReferenceTape.
+func SeqRereader(seq Seq, t Tape, tapeWriter chan<- *anyseq.Batch) Rereader {
+	go func() {
+		for in := range seq.Forward() {
+			tapeWriter <- in
+		}
+		close(tapeWriter)
+	}()
+	return &seqRereader{
+		In:   seq,
+		Tape: t,
+		Out:  t.ReadTape(0, -1),
+	}
+}
+
+func (s *seqRereader) Creator() anyvec.Creator {
+	return s.In.Creator()
+}
+
+func (s *seqRereader) Forward() <-chan *anyseq.Batch {
+	return s.Out
+}
+
+func (s *seqRereader) Vars() anydiff.VarSet {
+	return s.In.Vars()
+}
+
+func (s *seqRereader) Propagate(upstream <-chan *anyseq.Batch, grad Grad) {
+	for _ = range s.Forward() {
+	}
+
+	s.In.Propagate(upstream, grad)
+}
+
+func (s *seqRereader) Reread(start, end int) <-chan *anyseq.Batch {
+	return s.Tape.ReadTape(start, end)
+}
