@@ -8,6 +8,20 @@ import (
 	"github.com/unixpickle/lazyseq"
 )
 
+// BPTT applies the block to the sequence using
+// back-propagation through time.
+//
+// The sequence is produced lazily as the input is read.
+// Thus, this is fundamentally different than doing
+//
+//     lazyseq.Lazify(anyrnn.Map(lazyseq.Unlazify(seq), block))
+//
+// which does not produce any output until the entire
+// input sequence has been generated.
+func BPTT(in lazyseq.Seq, block anyrnn.Block) lazyseq.Seq {
+	return rnnFragmentToSeq(in, block, bptt(in.Forward(), block, nil))
+}
+
 func bptt(in <-chan *anyseq.Batch, block anyrnn.Block, start anyrnn.State) rnnFragment {
 	outChan := make(chan *anyseq.Batch, 1)
 	doneChan := make(chan struct{})
