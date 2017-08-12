@@ -21,8 +21,8 @@ func TestPoolToVec(t *testing.T) {
 
 	actualFunc := func() anydiff.Res {
 		return lazyseq.PoolToVec(lazyseq.Lazify(inSeqs),
-			func(seq lazyseq.Rereader) anydiff.Res {
-				return lazyseq.Mean(seq)
+			func(seq anyseq.Seq) anydiff.Res {
+				return lazyseq.Mean(lazyseq.Lazify(seq))
 			})
 	}
 	expectedFunc := func() anydiff.Res {

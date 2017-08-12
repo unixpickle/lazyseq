@@ -23,7 +23,7 @@ type poolToVecRes struct {
 // Thus, there is an implicit size constraint on s.
 //
 // This is similar to anyseq.PoolToVec.
-func PoolToVec(s Seq, f func(Rereader) anydiff.Res) anydiff.Res {
+func PoolToVec(s Seq, f func(anyseq.Seq) anydiff.Res) anydiff.Res {
 	res := &poolToVecRes{In: s}
 
 	var resBatches []*anyseq.ResBatch
@@ -36,7 +36,7 @@ func PoolToVec(s Seq, f func(Rereader) anydiff.Res) anydiff.Res {
 			Present: timestep.Present,
 		})
 	}
-	pooledSeq := Lazify(anyseq.ResSeq(s.Creator(), resBatches))
+	pooledSeq := anyseq.ResSeq(s.Creator(), resBatches)
 	res.Res = f(pooledSeq)
 
 	// Keep our set of variables correct when f ignores
