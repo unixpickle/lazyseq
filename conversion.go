@@ -101,22 +101,20 @@ func (u *unlazifySeq) Propagate(upstream []*anyseq.Batch, grad anydiff.Grad) {
 }
 
 type tapeRereader struct {
-	C    anyvec.Creator
 	Tape Tape
 	Out  <-chan *anyseq.Batch
 }
 
 // TapeRereader creates a constant Rereader from a Tape.
-func TapeRereader(c anyvec.Creator, t Tape) Rereader {
+func TapeRereader(t Tape) Rereader {
 	return &tapeRereader{
-		C:    c,
 		Tape: t,
 		Out:  t.ReadTape(0, -1),
 	}
 }
 
 func (t *tapeRereader) Creator() anyvec.Creator {
-	return t.C
+	return t.Tape.Creator()
 }
 
 func (t *tapeRereader) Forward() <-chan *anyseq.Batch {

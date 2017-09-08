@@ -73,8 +73,8 @@ func BenchmarkBPTT(b *testing.B) {
 		c := anyvec32.DefaultCreator{}
 		ins, ups, block := setupHSMBenchmark(c)
 
-		inSeq := lazyseq.Unlazify(lazyseq.TapeRereader(c, ins))
-		upstreamBatches := lazyseq.Unlazify(lazyseq.TapeRereader(c, ups)).Output()
+		inSeq := lazyseq.Unlazify(lazyseq.TapeRereader(ins))
+		upstreamBatches := lazyseq.Unlazify(lazyseq.TapeRereader(ups)).Output()
 		grad := anydiff.NewGrad(anynet.AllParameters(block)...)
 
 		b.ResetTimer()
@@ -124,7 +124,7 @@ func benchmarkLazy(b *testing.B, f func(lazyseq.Rereader, anyrnn.Block) lazyseq.
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		out := f(lazyseq.TapeRereader(c, ins), block)
+		out := f(lazyseq.TapeRereader(ins), block)
 		upstream := make(chan *anyseq.Batch, 1)
 		go func() {
 			for b := range ups.ReadTape(0, -1) {
