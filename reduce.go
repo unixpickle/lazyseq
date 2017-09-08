@@ -1,6 +1,9 @@
 package lazyseq
 
-import "github.com/unixpickle/anydiff/anyseq"
+import (
+	"github.com/unixpickle/anydiff/anyseq"
+	"github.com/unixpickle/anyvec"
+)
 
 type reducedTape struct {
 	In      Tape
@@ -11,6 +14,10 @@ type reducedTape struct {
 // indices where present is false.
 func ReduceTape(t Tape, present []bool) Tape {
 	return &reducedTape{In: t, Present: present}
+}
+
+func (r *reducedTape) Creator() anyvec.Creator {
+	return r.In.Creator()
 }
 
 func (r *reducedTape) ReadTape(start, end int) <-chan *anyseq.Batch {

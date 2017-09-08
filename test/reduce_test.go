@@ -11,7 +11,7 @@ import (
 func TestReduceTape(t *testing.T) {
 	c := anyvec64.DefaultCreator{}
 
-	tape, writer := lazyseq.ReferenceTape()
+	tape, writer := lazyseq.ReferenceTape(anyvec64.DefaultCreator{})
 
 	writer <- &anyseq.Batch{
 		Packed:  c.MakeVectorData([]float64{1, 2, 3, 4, 5, 6}),

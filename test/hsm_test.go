@@ -143,8 +143,8 @@ func setupHSMBenchmark(c anyvec.Creator) (inputs, upstream lazyseq.Tape, block a
 	const outSize = 64
 
 	block = anyrnn.NewLSTM(c, inSize, outSize)
-	inputs, inputsCh := lazyseq.ReferenceTape()
-	upstream, upstreamCh := lazyseq.ReferenceTape()
+	inputs, inputsCh := lazyseq.ReferenceTape(c)
+	upstream, upstreamCh := lazyseq.ReferenceTape(c)
 
 	for i := 0; i < seqLen; i++ {
 		batch := &anyseq.Batch{

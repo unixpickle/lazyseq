@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/unixpickle/anydiff/anyseq"
+	"github.com/unixpickle/anyvec"
 )
 
 // A Tape is a non-differentiable sequence that can be
@@ -20,6 +21,12 @@ import (
 // For example, you can use a Tape to record the results
 // of a reinforcement learning episode as it happens.
 type Tape interface {
+	// Creator returns the vector creator associated with
+	// this tape.
+	//
+	// Even empty tapes must have a creator.
+	Creator() anyvec.Creator
+
 	// ReadTape generates a channel that is sent a range
 	// of values from the tape.
 	//
@@ -48,8 +55,8 @@ type Tape interface {
 //
 // The caller must close the write channel to free
 // resources associated with the Tape.
-func ReferenceTape() (Tape, chan<- *anyseq.Batch) {
-	return newAbstractTape(func(in interface{}) *anyseq.Batch {
+func ReferenceTape(c anyvec.Creator) (Tape, chan<- *anyseq.Batch) {
+	return newAbstractTape(c, func(in interface{}) *anyseq.Batch {
 		return in.(*anyseq.Batch)
 	}, func(b *anyseq.Batch) interface{} {
 		return b
@@ -59,6 +66,8 @@ func ReferenceTape() (Tape, chan<- *anyseq.Batch) {
 // abstractTape is a tape of abstract objects which can be
 // converted to and from *anyseq.Batch.
 type abstractTape struct {
+	creator anyvec.Creator
+
 	lock      sync.Mutex
 	timesteps []interface{}
 	done      bool
@@ -68,9 +77,10 @@ type abstractTape struct {
 	fromBatch func(b *anyseq.Batch) interface{}
 }
 
-func newAbstractTape(to func(in interface{}) *anyseq.Batch,
+func newAbstractTape(c anyvec.Creator, to func(in interface{}) *anyseq.Batch,
 	from func(b *anyseq.Batch) interface{}) (Tape, chan<- *anyseq.Batch) {
 	res := &abstractTape{
+		creator:   c,
 		nextWait:  make(chan struct{}),
 		toBatch:   to,
 		fromBatch: from,
@@ -78,6 +88,10 @@ func newAbstractTape(to func(in interface{}) *anyseq.Batch,
 	inChan := make(chan *anyseq.Batch, 1)
 	go res.readInputs(inChan)
 	return res, inChan
+}
+
+func (a *abstractTape) Creator() anyvec.Creator {
+	return a.creator
 }
 
 func (a *abstractTape) ReadTape(start, end int) <-chan *anyseq.Batch {
@@ -113,6 +127,9 @@ func (a *abstractTape) ReadTape(start, end int) <-chan *anyseq.Batch {
 func (a *abstractTape) readInputs(inChan <-chan *anyseq.Batch) {
 	var lastPresent []bool
 	for input := range inChan {
+		if input.Packed.Creator() != a.creator {
+			panic("incorrect anyvec.Creator sent to tape")
+		}
 		if lastPresent == nil {
 			lastPresent = input.Present
 		} else {

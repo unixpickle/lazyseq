@@ -66,11 +66,11 @@ func TestPackRereader(t *testing.T) {
 func TestPackTape(t *testing.T) {
 	c := anyvec64.DefaultCreator{}
 
-	tape1, writer1 := lazyseq.ReferenceTape()
-	tape2, writer2 := lazyseq.ReferenceTape()
-	tape3, writer3 := lazyseq.ReferenceTape()
+	tape1, writer1 := lazyseq.ReferenceTape(c)
+	tape2, writer2 := lazyseq.ReferenceTape(c)
+	tape3, writer3 := lazyseq.ReferenceTape(c)
 
-	joined := lazyseq.PackTape([]lazyseq.Tape{tape1, tape2, tape3})
+	joined := lazyseq.PackTape(c, []lazyseq.Tape{tape1, tape2, tape3})
 
 	inBatches := []*anyseq.Batch{
 		{Present: []bool{true, false, true}},

@@ -14,12 +14,14 @@ import (
 
 func TestCompressedTape(t *testing.T) {
 	t.Run("Float32", func(t *testing.T) {
-		tape, writer := lazyseq.CompressedTape(flate.DefaultCompression)
-		testTapeOps(t, anyvec32.DefaultCreator{}, tape, writer, nil)
+		tape, writer := lazyseq.CompressedTape(anyvec32.DefaultCreator{},
+			flate.DefaultCompression)
+		testTapeOps(t, tape, writer, nil)
 	})
 	t.Run("Float64", func(t *testing.T) {
-		tape, writer := lazyseq.CompressedTape(flate.DefaultCompression)
-		testTapeOps(t, anyvec64.DefaultCreator{}, tape, writer, nil)
+		tape, writer := lazyseq.CompressedTape(anyvec64.DefaultCreator{},
+			flate.DefaultCompression)
+		testTapeOps(t, tape, writer, nil)
 	})
 }
 
@@ -32,12 +34,14 @@ func TestCompressedUint8Tape(t *testing.T) {
 		v.SetData(v.Creator().MakeNumericList(nums))
 	}
 	t.Run("Float32", func(t *testing.T) {
-		tape, writer := lazyseq.CompressedUint8Tape(flate.DefaultCompression)
-		testTapeOps(t, anyvec32.DefaultCreator{}, tape, writer, randGen)
+		tape, writer := lazyseq.CompressedUint8Tape(anyvec32.DefaultCreator{},
+			flate.DefaultCompression)
+		testTapeOps(t, tape, writer, randGen)
 	})
 	t.Run("Float64", func(t *testing.T) {
-		tape, writer := lazyseq.CompressedUint8Tape(flate.DefaultCompression)
-		testTapeOps(t, anyvec64.DefaultCreator{}, tape, writer, randGen)
+		tape, writer := lazyseq.CompressedUint8Tape(anyvec64.DefaultCreator{},
+			flate.DefaultCompression)
+		testTapeOps(t, tape, writer, randGen)
 	})
 }
 
@@ -56,7 +60,7 @@ func BenchmarkCompressedTape(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		tape, writer := lazyseq.CompressedTape(flate.DefaultCompression)
+		tape, writer := lazyseq.CompressedTape(c, flate.DefaultCompression)
 		r := tape.ReadTape(0, 1)
 		writer <- batch
 		<-r
@@ -76,7 +80,7 @@ func BenchmarkCompressedTapeRead(b *testing.B) {
 		batch.Present[i] = true
 	}
 
-	tape, writer := lazyseq.CompressedTape(flate.DefaultCompression)
+	tape, writer := lazyseq.CompressedTape(c, flate.DefaultCompression)
 	writer <- batch
 	close(writer)
 
@@ -103,7 +107,7 @@ func BenchmarkCompressedUint8Tape(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		tape, writer := lazyseq.CompressedUint8Tape(flate.DefaultCompression)
+		tape, writer := lazyseq.CompressedUint8Tape(c, flate.DefaultCompression)
 		r := tape.ReadTape(0, 1)
 		writer <- batch
 		<-r
@@ -123,7 +127,7 @@ func BenchmarkCompressedUint8TapeRead(b *testing.B) {
 		batch.Present[i] = true
 	}
 
-	tape, writer := lazyseq.CompressedUint8Tape(flate.DefaultCompression)
+	tape, writer := lazyseq.CompressedUint8Tape(c, flate.DefaultCompression)
 	writer <- batch
 	close(writer)
 

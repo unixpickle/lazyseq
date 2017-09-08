@@ -190,8 +190,9 @@ func (p *packRereaderRes) Reread(start, end int) <-chan *anyseq.Batch {
 }
 
 type packedTape struct {
+	creator anyvec.Creator
+
 	LanesCounted <-chan struct{}
-	Creator      anyvec.Creator
 	LanesPerTape []int
 
 	Tapes []Tape
@@ -199,9 +200,11 @@ type packedTape struct {
 
 // PackTape creates an aggregate Tape that combines the
 // sequences from other tapes.
-func PackTape(tapes []Tape) Tape {
+func PackTape(c anyvec.Creator, tapes []Tape) Tape {
 	countedChan := make(chan struct{})
 	res := &packedTape{
+		creator: c,
+
 		LanesCounted: countedChan,
 		LanesPerTape: make([]int, len(tapes)),
 		Tapes:        tapes,
@@ -215,18 +218,20 @@ func PackTape(tapes []Tape) Tape {
 	return res
 }
 
-func (t *packedTape) ReadTape(start, end int) <-chan *anyseq.Batch {
+func (p *packedTape) Creator() anyvec.Creator {
+	return p.creator
+}
+
+func (p *packedTape) ReadTape(start, end int) <-chan *anyseq.Batch {
 	res := make(chan *anyseq.Batch)
-	inChans := make([]<-chan *anyseq.Batch, len(t.Tapes))
-	for i, t := range t.Tapes {
+	inChans := make([]<-chan *anyseq.Batch, len(p.Tapes))
+	for i, t := range p.Tapes {
 		inChans[i] = t.ReadTape(start, end)
 	}
 	go func() {
-		<-t.LanesCounted
+		<-p.LanesCounted
 		// A nil creator means there are no batches, anyway.
-		if t.Creator != nil {
-			streamAndJoin(t.Creator, inChans, t.LanesPerTape, res)
-		}
+		streamAndJoin(p.creator, inChans, p.LanesPerTape, res)
 		close(res)
 	}()
 	return res
@@ -240,7 +245,9 @@ func (p *packedTape) countLanes() {
 	for i, ch := range seqs {
 		if batch, ok := <-ch; ok {
 			p.LanesPerTape[i] = len(batch.Present)
-			p.Creator = batch.Packed.Creator()
+			if batch.Packed.Creator() != p.creator {
+				panic("incorrect anyvec.Creator sent to tape")
+			}
 		}
 	}
 }

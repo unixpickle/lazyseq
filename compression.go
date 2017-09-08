@@ -29,8 +29,8 @@ import (
 //
 // The caller must close the write channel to free
 // resources associated with the Tape.
-func CompressedTape(level int) (Tape, chan<- *anyseq.Batch) {
-	return compressedTape(level, false)
+func CompressedTape(c anyvec.Creator, level int) (Tape, chan<- *anyseq.Batch) {
+	return compressedTape(c, level, false)
 }
 
 // CompressedUint8Tape is like CompressedTape, but the
@@ -39,15 +39,16 @@ func CompressedTape(level int) (Tape, chan<- *anyseq.Batch) {
 // This can yield better performance than CompressedTape
 // when the data is known to be 8-bit unsigned integers
 // beforehand.
-func CompressedUint8Tape(level int) (Tape, chan<- *anyseq.Batch) {
-	return compressedTape(level, true)
+func CompressedUint8Tape(c anyvec.Creator, level int) (Tape, chan<- *anyseq.Batch) {
+	return compressedTape(c, level, true)
 }
 
-func compressedTape(level int, useUint8 bool) (Tape, chan<- *anyseq.Batch) {
+func compressedTape(c anyvec.Creator, level int, useUint8 bool) (Tape,
+	chan<- *anyseq.Batch) {
 	var creatorLock sync.RWMutex
 	var creator anyvec.Creator
 
-	return newAbstractTape(func(in interface{}) *anyseq.Batch {
+	return newAbstractTape(c, func(in interface{}) *anyseq.Batch {
 		batch := in.(*compressedBatch)
 		creatorLock.RLock()
 		cr := creator
